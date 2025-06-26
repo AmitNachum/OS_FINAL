@@ -41,9 +41,18 @@ class Graph{
    }
 
    void add_edge(const T &vertex_v, const T &vertex_u,double weight){
+    auto& neighbor_set = graph[vertex_v];
+    
+    auto it = std::find_if(neighbor_set.begin(),neighbor_set.end(), 
+                     [&](auto const &pr){
+                        return pr.first == vertex_u;
+                                    });
+
+    if(it == neighbor_set.end()){
     graph[vertex_v].insert({vertex_u,weight});
     graph[vertex_u].insert({vertex_v,weight});
-   }
+   } 
+}
 
    void remove_edge(const T &vertex_v, const T &vertex_u,double weight){
     graph[vertex_v].erase({vertex_u,weight});

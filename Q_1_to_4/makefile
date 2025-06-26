@@ -4,7 +4,7 @@ CXXFLAGS = -std=c++17 -Wall -Wextra -I./Graph -g -fprofile-arcs -ftest-coverage
 LDFLAGS = #-fprofile-arcs -ftest-coverage
 #Dir and Files
 GRAPH_DIR = Graph
-SRC = $(GRAPH_DIR)/Graph.cpp main_graph.cpp
+SRC = main_graph.cpp
 OBJ = $(SRC:.cpp=.o)
 TARGET = main_graph
 
