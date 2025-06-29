@@ -6,6 +6,37 @@
 #include <queue>
 #include <stack>
 #include <memory>
+#include <functional>
+
+
+
+
+template <typename K> 
+struct Edge{
+    K vertex_w;
+    K vertex_r;
+    double edge_weight;
+    Edge(K vertex1,K vertex2,double weight_value):vertex_w(vertex1),vertex_r(vertex2),edge_weight(weight_value){}
+    ~Edge() = default;
+    bool operator>(const Edge& other) const{
+        return edge_weight > other.edge_weight;
+    }
+};
+
+template <typename J>
+struct Vertex_weight{
+    J vertex_u;
+    double weight_heap;
+
+    Vertex_weight(J vertex,double weight_i):vertex_u(vertex),weight_heap(weight_i){}
+    ~Vertex_weight() = default;
+
+    bool operator>(const Vertex_weight& other) const{
+        return this->weight_heap > other.weight_heap;
+    }
+};
+
+
 namespace Graph_implementation{
 
     //==== custom hash for std::pair ====
@@ -19,6 +50,11 @@ struct pair_hash {
         };
 };
 
+
+
+
+
+
 template <typename T>
 class Graph{
 
@@ -28,7 +64,7 @@ class Graph{
    
    
    public:
-   Graph(size_t amount):vertices_amount(amount){};
+   Graph(size_t amount):vertices_amount(amount){}
    ~Graph() = default;
    Graph(const Graph &other) = delete;
    Graph operator=(Graph &other) = delete;
@@ -146,6 +182,45 @@ std::unique_ptr<std::vector<T>> find_euler_circut() {
     return std::move(circuit_list);
 }
 
+
+
+//Prim's Algorithm
+std::vector<struct Edge<T>> prims_algorithm(const T& source){
+    auto &adj_map = this->graph;
+    std::priority_queue<Edge<T>,std::vector<Edge<T>>,std::greater<Edge<T>>> pq;
+
+    std::unordered_set<T> inMST;
+    std::vector<struct Edge<T>> result;
+    
+    pq.push({source,source,0}); //Dummy node
+
+
+    while(!pq.empty()){
+
+        auto [v,u,w] = pq.top();
+        pq.pop();
+
+        if(inMST.count(v) > 0) continue;
+
+        if(v != u){ // skip dummy
+            result.emplace_back(v,u,w);
+        }
+        inMST.insert(v);
+
+        for(auto& [neighbor,weight]: adj_map[v]){
+            if(inMST.count(neighbor) == 0)
+                pq.push({v,neighbor,weight});
+        }
+    }
+
+    return result;
+
+}
+
+
+
+
+
    template<typename U>
     friend std::ostream& operator<<(std::ostream&, const Graph<U>&);
 
@@ -165,6 +240,7 @@ std::ostream &operator<<(std::ostream &os, const Graph<T> &other) {
     os << "}";
     return os;
 }
+
 
 
 
