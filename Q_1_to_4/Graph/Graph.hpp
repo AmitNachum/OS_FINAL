@@ -16,8 +16,10 @@ struct Edge{
     K vertex_w;
     K vertex_r;
     double edge_weight;
+
     Edge(K vertex1,K vertex2,double weight_value):vertex_w(vertex1),vertex_r(vertex2),edge_weight(weight_value){}
     ~Edge() = default;
+
     bool operator>(const Edge& other) const{
         return edge_weight > other.edge_weight;
     }
@@ -76,9 +78,13 @@ class Graph{
     graph[vertex] = {};
    }
 
-   void add_edge(const T &vertex_v, const T &vertex_u,double weight){
+
+
+
+   void add_edge(const T &vertex_v, const T &vertex_u,double weight,bool directed = false){
     auto& neighbor_set = graph[vertex_v];
-    
+
+    if(!directed){
     auto it = std::find_if(neighbor_set.begin(),neighbor_set.end(), 
                      [&](auto const &pr){
                         return pr.first == vertex_u;
@@ -88,12 +94,28 @@ class Graph{
     graph[vertex_v].insert({vertex_u,weight});
     graph[vertex_u].insert({vertex_v,weight});
    } 
+} else{
+
+    auto it = std::find_if(neighbor_set.begin(),neighbor_set.end(),
+    [&](auto const &pair){
+        return pair.first == vertex_u;
+    });
+
+    if(it == neighbor_set.end()){
+        graph[vertex_v].insert({vertex_u,weight});
+    }
+
+}  
 }
 
-   void remove_edge(const T &vertex_v, const T &vertex_u,double weight){
+   void remove_edge(const T &vertex_v, const T &vertex_u,double weight,bool directed = false){
+    if(!directed){
     graph[vertex_v].erase({vertex_u,weight});
     graph[vertex_u].erase({vertex_v,weight});
    }
+   else
+     graph[vertex_v].erase({vertex_u,weight});
+}
 
 
 
@@ -127,7 +149,7 @@ bool is_connected() const{
     T start = graph.begin()->first;
     st.push(start);
 
-
+    
     while(!st.empty()){
 
         T vertex_u = st.top();
@@ -218,6 +240,125 @@ std::vector<struct Edge<T>> prims_algorithm(const T& source){
 }
 
 
+using adj_list = std::unordered_map<T,std::unordered_set<std::pair<T,double>,pair_hash>>;
+
+adj_list transpose_graph(bool directed = false){
+    if(!directed){
+        std::cout <<"Cannot transpose an undirected Graph" << std::endl;
+        return {};  
+    }
+
+    adj_list reversed;
+
+
+    for(const auto& [vertex,neighbors] : graph){
+        reversed[vertex] = {};
+    }
+
+    
+    for(const auto& [vertex,values] : graph){
+        for(auto& [neighbor,weight] : values){
+            reversed[neighbor].insert({vertex,weight});
+        }
+    }
+    
+
+    return reversed;
+
+
+}
+
+
+private:
+    void first_dfs(const T& vertex,std::stack<T>& stack_scc){
+        std::stack<std::pair<T,bool>> dfs_stack;
+        std::unordered_set<T> visited;
+
+        dfs_stack.push({vertex,false});
+
+        while(!dfs_stack.empty()){
+            auto [u,backtrack] = dfs_stack.top();
+            dfs_stack.pop();
+
+            if(backtrack){
+            stack_scc.push(u);
+            continue;
+            }
+
+            if(visited.count(u)) continue;
+            visited.insert(u);
+
+            dfs_stack.push({u,true});//simulating Post order
+            
+            for(const auto& [neighbor,weight] : graph[u]){
+                if(visited.count(neighbor) == 0){
+                    dfs_stack.push({neighbor,false});
+                }
+            }
+            
+        }
+
+    }
+
+    void second_dfs(const T& vertex, const adj_list& transposed_g, std::unordered_set<T>& visited, std::vector<T>& current_scc){
+
+        std::stack<T> dfs_2_stack;
+        dfs_2_stack.push(vertex);//dummy node;
+        visited.insert(vertex);
+        
+        
+        while(!dfs_2_stack.empty()){
+            auto u = dfs_2_stack.top();
+            dfs_2_stack.pop();
+            current_scc.push_back(u);
+
+
+            for(const auto& [neighbor,weight] : transposed_g.at(u)){
+                if(visited.count(neighbor) == 0){
+                    dfs_2_stack.push(neighbor);
+                    visited.insert(neighbor);
+                }
+            }
+
+        }
+    }
+
+
+
+public:
+
+std::vector<std::vector<T>> kosarajus_algorithm_scc(){
+    std::stack<T> scc_stack;
+    std::unordered_set<T> visited;
+
+    for(const auto& [vertex,neighbors]: graph){
+        if(visited.count(vertex) == 0){
+        first_dfs(vertex,scc_stack);
+    }
+ }
+
+    adj_list reversed = transpose_graph(true);
+
+    
+
+
+    visited.clear();
+    std::vector<std::vector<T>> result;
+
+
+    while(!scc_stack.empty()){
+        auto v = scc_stack.top();
+        scc_stack.pop();
+
+        if(visited.count(v) == 0){
+            std::vector<T> component;
+            second_dfs(v,reversed,visited,component);
+            result.emplace_back(component);
+        }
+    }
+    return result;
+}
+
 
 
 
@@ -240,6 +381,8 @@ std::ostream &operator<<(std::ostream &os, const Graph<T> &other) {
     os << "}";
     return os;
 }
+
+
 
 
 

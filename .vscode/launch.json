@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug OS_final",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/random_median",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "build-random_median",
+      "stopAtEntry": true,
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "miDebuggerPath": "/usr/bin/gdb"
+    }
+  ]
+}
