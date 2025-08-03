@@ -2,17 +2,16 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug OS_final",
+      "name": "Debug testingG",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/random_median",
+      "program": "${workspaceFolder}/Q_1_to_4/Graph/testingG",
       "args": [],
-      "cwd": "${workspaceFolder}",
-      "preLaunchTask": "build-random_median",
-      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/Q_1_to_4/Graph",
+      "stopAtEntry": false,
       "externalConsole": false,
       "MIMode": "gdb",
-      "miDebuggerPath": "/usr/bin/gdb"
+      "preLaunchTask": "build testingG"
     }
   ]
 }
