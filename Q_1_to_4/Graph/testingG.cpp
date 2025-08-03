@@ -1,39 +1,21 @@
 #include "../Graph/Graph.hpp"
 using namespace Graph_implementation;
-#define DIRECTED true
+#define DIRECTED truel
 
-int main() {
-    Graph<int> graph(5);
+int main(){
 
-    // Add all vertices
-    graph.add_vertex(1);
-    graph.add_vertex(2);
-    graph.add_vertex(3);
-    graph.add_vertex(4);
-    graph.add_vertex(5);
+Graph<int> g(4);
+g.add_edge(0, 1, 10);
+g.add_edge(1, 2, 1);
+g.add_edge(2, 1, 1);  // This cycle can trap the algorithm
+g.add_edge(2, 3, 10);
+g.add_edge(0, 3, 5);  // Parallel path (to confuse augmenting path logic)
 
-    // Cycle: 1 → 2 → 3 → 1
-    graph.add_edge(1, 2, 1.0, DIRECTED);
-    graph.add_edge(2, 3, 1.0, DIRECTED);
-    graph.add_edge(3, 1, 1.0, DIRECTED);
+double maxflow = g.edmon_karp_algorithm(0, 3);
+std::cout << "Max Flow: " << maxflow << std::endl;
 
-    // Chain out of the cycle: 3 → 4 → 5
-    graph.add_edge(3, 4, 1.0, DIRECTED);
-    graph.add_edge(4, 5, 1.0, DIRECTED);
 
-    // Run Kosaraju
-    auto scc = graph.kosarajus_algorithm_scc();
 
-    // Print SCCs
-    std::cout << "{\n";
-    for (const auto& component : scc) {
-        std::cout << "[ ";
-        for (const auto& vertex : component) {
-            std::cout << vertex << " ";
-        }
-        std::cout << "]\n";
-    }
-    std::cout << "}\n";
+return 0;
 
-    return 0;
 }

@@ -1,0 +1,26 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build testingG",
+      "type": "shell",
+      "command": "g++",
+      "args": [
+        "-g",                     // include debug info
+        "testingG.cpp",           // your test driver
+        "-I",                     // tell g++ where Graph.hpp lives
+        "../Graph",               // relative to Q_1_to_4/Graph
+        "-o",
+        "testingG"                // output binary
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/Q_1_to_4/Graph"
+      },
+      "problemMatcher": ["$gcc"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ]
+}

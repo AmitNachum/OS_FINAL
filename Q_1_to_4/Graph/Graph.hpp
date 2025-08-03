@@ -7,23 +7,50 @@
 #include <stack>
 #include <memory>
 #include <functional>
+#include <limits>
+
 
 
 
 
 template <typename K> 
-struct Edge{
+struct Edge {
     K vertex_w;
     K vertex_r;
-    double edge_weight;
+    double edge_weight = 0.0;
+    double capacity = 0.0;
+    double current_flow = 0.0;
 
-    Edge(K vertex1,K vertex2,double weight_value):vertex_w(vertex1),vertex_r(vertex2),edge_weight(weight_value){}
-    ~Edge() = default;
+    Edge(K vertex1, K vertex2, double weight_value)
+        : vertex_w(vertex1), vertex_r(vertex2), edge_weight(weight_value) {}
 
-    bool operator>(const Edge& other) const{
+    Edge(K vertex1, K vertex2, double capacity_val, double current_flow_val = 0.0)
+        : vertex_w(vertex1), vertex_r(vertex2),
+          capacity(capacity_val), current_flow(current_flow_val) {}
+
+    ~Edge() = default;   
+    Edge() = default;      
+
+    void set_current_flow(double value) {
+        current_flow = value;
+    }
+
+    double residual_capacity() const {
+        return capacity - current_flow;
+    }
+
+    bool operator>(const Edge& other) const {
         return edge_weight > other.edge_weight;
     }
+
+
+bool operator==(const Edge<K>& rhs) {
+    return vertex_w == rhs.vertex_w &&
+           vertex_r == rhs.vertex_r;
+}
+
 };
+
 
 template <typename J>
 struct Vertex_weight{
@@ -53,6 +80,16 @@ struct pair_hash {
 };
 
 
+/*===custom hash for Edge struct===*/
+
+template<typename K>
+struct edge_hash {
+    std::size_t operator()(const Edge<K>& edge) const {
+        std::size_t hash1 = std::hash<K>()(edge.vertex_w);
+        std::size_t hash2 = std::hash<K>()(edge.vertex_r);
+        return hash1 ^ (hash2 << 1); // Combine hashes
+    }
+};
 
 
 
@@ -232,6 +269,7 @@ std::vector<struct Edge<T>> prims_algorithm(const T& source){
         for(auto& [neighbor,weight]: adj_map[v]){
             if(inMST.count(neighbor) == 0)
                 pq.push({v,neighbor,weight});
+
         }
     }
 
@@ -324,6 +362,83 @@ private:
     }
 
 
+using residual_graph = std::unordered_map<T,std::vector<Edge<T>>>;
+residual_graph convert_to_residual() {
+    residual_graph rs;
+
+    // Pass 1: Add all forward edges from the original graph.
+    // This correctly sets their initial capacities.
+    for (const auto& [u, neighbors] : graph) {
+        for (const auto& [v, cap] : neighbors) {
+            rs[u].emplace_back(u, v, cap, 0.0);
+        }
+    }
+
+    // Pass 2: Add backward edges, but ONLY if an edge in that direction
+    // doesn't already exist from an edge in the original graph.
+    for (const auto& [u, neighbors] : graph) {
+        for (const auto& [v, cap] : neighbors) {
+            // Check if the reverse edge v -> u already exists in our new graph `rs`.
+            bool reverse_exists = false;
+            if (rs.count(v)) {
+                for (const auto& edge : rs.at(v)) {
+                    if (edge.vertex_r == u) {
+                        reverse_exists = true;
+                        break;
+                    }
+                }
+            }
+            // If it doesn't exist, add it with 0 capacity.
+            if (!reverse_exists) {
+                rs[v].emplace_back(v, u, 0.0, 0.0);
+            }
+        }
+    }
+    return rs;
+}
+
+
+
+bool bfs_source_to_sink(
+    const T& source,
+    const T& sink,
+    const residual_graph& rs,
+    std::unordered_map<T, T>& parent
+) {                    
+    std::unordered_set<T> visited;
+    std::queue<T> que;
+
+    visited.insert(source);
+    que.push(source);
+
+    std::cout << "BFS from " << source << " to " << sink << "\n";
+
+    while (!que.empty()) {
+        T u = que.front(); que.pop();
+
+        for (const Edge<T>& e : rs.at(u)) {
+            T v = e.vertex_r;
+            double rc = e.residual_capacity();
+            if (rc > 0 && !visited.count(v)) {
+                parent[v] = u;
+                std::cout << "    visiting, parent[" << v << "]=" << u << "\n";
+                if (v == sink) {
+                    std::cout << "    reached sink!\n";
+                    return true;
+                }
+                visited.insert(v);
+                que.push(v);
+            }
+        }
+    }
+
+    std::cout << "  no path found\n";
+    return false;
+}
+
+
+
+
 
 public:
 
@@ -358,6 +473,72 @@ std::vector<std::vector<T>> kosarajus_algorithm_scc(){
     }
     return result;
 }
+
+
+
+
+double edmon_karp_algorithm(const T& source, const T& sink){
+    residual_graph rs = convert_to_residual();
+    double flow_answer = 0.0;
+
+
+    std::unordered_map<T,T> parent;
+
+
+
+    while(bfs_source_to_sink(source,sink,rs,parent)){
+        std::cout <<"found an augmented path \n";
+        double path_flow = std::numeric_limits<double>::infinity(); // starting with a max infinity
+        T curr = sink;
+
+
+        //finding the bottle neck
+        // finding the bottleneck (only positive‐capacity edges)
+        while (curr != source) {
+            T prev = parent[curr];
+                for (const Edge<T>& edge : rs[prev]) {
+                    if (edge.vertex_r == curr) {
+                        path_flow = std::min(path_flow, edge.residual_capacity());
+                        break;
+                }
+            }
+        curr = prev;
+    }
+
+    
+
+
+        curr = sink;
+        //update the residual graph
+        while(curr != source){
+            auto prev = parent[curr];
+
+            //Forward edge (prev -> curr)
+            for (auto &e : rs[prev]) {
+                if (e.vertex_r==curr) { e.current_flow += path_flow; break; }
+            }
+
+
+            //Backwards edge (curr -> prev)
+            for (auto &e : rs[curr]) {
+                if (e.vertex_r==prev) { e.current_flow -= path_flow; break; }
+            }
+
+
+            curr = prev;
+
+        }   
+        flow_answer += path_flow;
+
+
+     parent.clear();
+        
+
+    }
+
+    return flow_answer;
+}
+
 
 
 
