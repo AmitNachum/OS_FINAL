@@ -100,6 +100,8 @@ class Graph{
    private:
    size_t vertices_amount;
    std::unordered_map<T, std::unordered_set<std::pair<T, double>, pair_hash>> graph;
+   const T& start_vertex;
+
    
    
    public:
@@ -112,9 +114,15 @@ class Graph{
 
 
    void add_vertex(const T &vertex){
+    if(graph.empty()){
+        start_vertex = vertex;
+    }
     graph[vertex] = {};
    }
 
+   T& get_first(){
+       return start_vertex;
+   }
 
 
 
@@ -209,7 +217,7 @@ bool is_connected() const{
 
 std::unique_ptr<std::vector<T>> find_euler_circut() {
     if (!is_eulerian()) {
-        throw std::runtime_error("Graph is Not Eulerian.");
+        nullptr;
     }
 
     std::stack<T> st;
@@ -332,7 +340,9 @@ private:
                 if(visited.count(neighbor) == 0){
                     dfs_stack.push({neighbor,false});
                 }
-            }
+           Request(const std::string& name,std::vector<std::string>& args):name(name),args(args){
+
+  } }
             
         }
 
@@ -434,6 +444,59 @@ bool bfs_source_to_sink(
 
     std::cout << "  no path found\n";
     return false;
+}
+
+
+    bool check_for_edge(const T& vertex_1,const T& vertex_2)const{
+
+        auto it = graph.find(vertex_1);
+        if(it == graph.end()){
+            return false;
+        }
+        //it is an iterator of a pair (neighbor,weight)
+
+        return std::any_of(it->second.begin(),it->second.end(),
+        [&](const auto& pair){
+            return pair.first == vertex_2;
+        });
+    }
+
+bool dfs_for_hamilton_cycle(const T& vertex,
+    const T& start,
+    std::vector<T>& path,
+    std::unordered_set<T>& visited){
+    
+        if(path.size() == vertices_amount){
+
+            if(check_for_edge(vertex,start)){
+                path.push_back(start);
+                return true;
+
+            }
+            return false;
+        }
+
+        visited.insert(vertex);
+
+
+
+        for(const auto& [neighbor,weight]: graph[vertex]){
+           
+            if(!visited.count(neighbor)){
+                path.push_back(neighbor);
+                if(dfs_for_hamilton_cycle(neighbor,start,path,visited)){
+                    return true;
+                }
+                path.pop_back();
+                visited.erase(neighbor); 
+
+            }
+        }
+
+        visited.erase(vertex);
+        return false;
+
+
 }
 
 
@@ -541,6 +604,21 @@ double edmon_karp_algorithm(const T& source, const T& sink){
 
 
 
+
+ const std::vector<T>& hamilton_cycle(const T& start){
+    std::vector<T> cycle;
+    std::unordered_set<T> visited;
+    cycle.reserve(vertices_amount + 1);
+
+    cycle.push_back(start);
+    visited.insert(start);
+
+    if(dfs_for_hamilton_cycle(start,start,cycle,visited)){
+        return cycle;
+    } else{
+        return {};
+    }
+}
 
 
    template<typename U>
