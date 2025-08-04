@@ -32,7 +32,7 @@ int main() {
         freeaddrinfo(res);
         return EXIT_FAILURE;
     }
-    if (listen(server_fd, 5) < 0) {
+    if (listen(server_fd, BACKLOG) < 0) {
         perror("listen");
         close(server_fd);
         freeaddrinfo(res);
@@ -41,12 +41,12 @@ int main() {
     freeaddrinfo(res);
 
     // Add listening socket to poll list
-    fds.push_back({ .fd = server_fd, .events = POLLIN, .revents = 0 });
+    fds.push_back({ .fd = server_fd, .events = POLLIN, .revents = DEFAULT_REVENTS });
 
     cout << "[Server is listening on Port " << PORT << " TCP]" << endl;
 
     while (true) {
-        int nready = ::poll(fds.data(), fds.size(), -1);
+        int nready = ::poll(fds.data(), fds.size(), NO_TIMEOUT);
         if (nready < 0) {
             perror("poll");
             break;

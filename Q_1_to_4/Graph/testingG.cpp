@@ -2,20 +2,36 @@
 using namespace Graph_implementation;
 #define DIRECTED truel
 
-int main(){
+int main() {
+    // 1) Graph WITH a Hamiltonian cycle: 0–1–2–3–0
+    Graph<int> g1(4);
+    g1.add_edge(0, 1, 1);
+    g1.add_edge(1, 2, 1);
+    g1.add_edge(2, 3, 1);
+    g1.add_edge(3, 0, 1);
 
-Graph<int> g(4);
-g.add_edge(0, 1, 10);
-g.add_edge(1, 2, 1);
-g.add_edge(2, 1, 1);  // This cycle can trap the algorithm
-g.add_edge(2, 3, 10);
-g.add_edge(0, 3, 5);  // Parallel path (to confuse augmenting path logic)
+    auto cycle1 = g1.hamilton_cycle(0);
+    if (cycle1.empty()) {
+        std::cout << "g1: no Hamiltonian cycle found\n";
+    } else {
+        std::cout << "g1 cycle:";
+        for (int v : cycle1) std::cout << ' ' << v;
+        std::cout << "\n";
+    }
 
-double maxflow = g.edmon_karp_algorithm(0, 3);
-std::cout << "Max Flow: " << maxflow << std::endl;
+    // 2) Graph WITHOUT a Hamiltonian cycle: a simple path 0–1–2
+    Graph<int> g2(3);
+    g2.add_edge(0, 1, 1);
+    g2.add_edge(1, 2, 1);
 
+    auto cycle2 = g2.hamilton_cycle(0);
+    if (cycle2.empty()) {
+        std::cout << "g2: no Hamiltonian cycle found\n";
+    } else {
+        std::cout << "g2 cycle:";
+        for (int v : cycle2) std::cout << ' ' << v;
+        std::cout << "\n";
+    }
 
-
-return 0;
-
+    return 0;
 }
