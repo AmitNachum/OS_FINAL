@@ -78,7 +78,6 @@ int main() {
                     cout << "Client Disconnected." << endl;
                     close(client_fd);
                    } else{
-
                     buf[n] = '\0';
                     int vertices = 0;
 

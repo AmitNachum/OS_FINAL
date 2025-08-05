@@ -1,0 +1,29 @@
+{
+  "version": 4,
+  "configurations": [
+    {
+      "name": "Linux",
+      "compilerPath": "/usr/bin/g++",
+      "intelliSenseMode": "linux-gcc-x64",
+      "cStandard": "c17",
+      "cppStandard": "c++17",
+
+      // Tell VS Code where to look for your headers:
+      "includePath": [
+        "${workspaceFolder}/**",               // everything under the root
+        "${workspaceFolder}/Q_1_to_4/Graph",    // Graph.hpp
+        "${workspaceFolder}/Q_6",               // network_interface.hpp, server.cpp, client.cpp
+        "${workspaceFolder}/Q_6/client",        // if you have subfolders under Q_6
+        "${workspaceFolder}/Q_7",               // server_functions.hpp, server.cpp, client.cpp
+        "${workspaceFolder}/Q_7/Factory",       // Factory_Algorithms.hpp
+        "${workspaceFolder}/Q_7/Socket_class",  // Server_Socket.hpp, Client_Socket.hpp
+        "${workspaceFolder}/Q_7/Strategy"       // Strategy_interface.hpp, Algo*.hpp
+      ],
+
+      // (Optional) if you need to define any macros globally:
+      "defines": [
+        // "SOME_MACRO=1"
+      ]
+    }
+  ]
+}

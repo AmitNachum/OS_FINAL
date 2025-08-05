@@ -1,9 +1,9 @@
 #pragma once
-#include "AlgoIO.hpp"
 #include <vector>
 #include <string>
 #include <optional>
 #include <sstream>
+
 
 // Strategy for computing an MST via Prim's algorithm
 // Request<T> is assumed to have std::optional<T> start
@@ -11,7 +11,7 @@
 template <typename T>
 class MSTAlgo : public AlgorithmIO<T> {
 public:
-    Response run(const Request<T>& req) override {
+    virtual Response run(const Request<T>& req) override {
         if (!req.start.has_value()) {
             return {false, "Missing the starting vertex"};
         }

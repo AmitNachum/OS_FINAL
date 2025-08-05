@@ -24,7 +24,7 @@ struct Edge {
     Edge(K vertex1, K vertex2, double weight_value)
         : vertex_w(vertex1), vertex_r(vertex2), edge_weight(weight_value) {}
 
-    Edge(K vertex1, K vertex2, double capacity_val, double current_flow_val = 0.0)
+    Edge(K vertex1, K vertex2, double capacity_val, double current_flow_val)
         : vertex_w(vertex1), vertex_r(vertex2),
           capacity(capacity_val), current_flow(current_flow_val) {}
 
@@ -100,7 +100,7 @@ class Graph{
    private:
    size_t vertices_amount;
    std::unordered_map<T, std::unordered_set<std::pair<T, double>, pair_hash>> graph;
-   const T& start_vertex;
+T start_vertex;
 
    
    
@@ -217,7 +217,7 @@ bool is_connected() const{
 
 std::unique_ptr<std::vector<T>> find_euler_circut() {
     if (!is_eulerian()) {
-        nullptr;
+        return nullptr;
     }
 
     std::stack<T> st;
@@ -259,12 +259,16 @@ std::vector<struct Edge<T>> prims_algorithm(const T& source){
     std::unordered_set<T> inMST;
     std::vector<struct Edge<T>> result;
     
-    pq.push({source,source,0}); //Dummy node
+    pq.push(Edge<T>(source,source,0.0)); //Dummy node
 
 
     while(!pq.empty()){
 
-        auto [v,u,w] = pq.top();
+        Edge<T> top = pq.top();
+        auto v = top.vertex_r;
+        auto u = top.vertex_w;
+        auto w = top.edge_weight;
+
         pq.pop();
 
         if(inMST.count(v) > 0) continue;
@@ -276,7 +280,7 @@ std::vector<struct Edge<T>> prims_algorithm(const T& source){
 
         for(auto& [neighbor,weight]: adj_map[v]){
             if(inMST.count(neighbor) == 0)
-                pq.push({v,neighbor,weight});
+                pq.push(Edge<T>(v,neighbor,weight));
 
         }
     }
@@ -340,9 +344,7 @@ private:
                 if(visited.count(neighbor) == 0){
                     dfs_stack.push({neighbor,false});
                 }
-           Request(const std::string& name,std::vector<std::string>& args):name(name),args(args){
-
-  } }
+          }
             
         }
 
@@ -605,7 +607,7 @@ double edmon_karp_algorithm(const T& source, const T& sink){
 
 
 
- const std::vector<T>& hamilton_cycle(const T& start){
+ const std::vector<T> hamilton_cycle(const T& start){
     std::vector<T> cycle;
     std::unordered_set<T> visited;
     cycle.reserve(vertices_amount + 1);

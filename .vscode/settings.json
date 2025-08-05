@@ -61,6 +61,12 @@
     "algorithm": "cpp",
     "iterator": "cpp",
     "memory_resource": "cpp",
-    "random": "cpp"
-}
+    "random": "cpp",
+    "charconv": "cpp",
+    "chrono": "cpp",
+    "format": "cpp",
+    "iomanip": "cpp",
+    "span": "cpp",
+    "variant": "cpp"
+  }
 }
