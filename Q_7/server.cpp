@@ -1,116 +1,106 @@
-#include "../Q_6/network_interface.hpp"
-#include "Factory/Factory_Algorithms.hpp"
-#include "Strategy/Strategy_interface.hpp"
+#include "./Factory/Factory_Algorithms.hpp"
+#include "./Socket_class/Server_Socket.hpp"
+#include "./Strategy/Strategy_interface.hpp"   // for Graph<int>
+#include "server_functions.hpp"                  // parse_request + serialize_response
 #include <unordered_map>
+#include <memory>
+#include <vector>
+#include <poll.h>
+#include <unistd.h>
+#include <iostream>
+#include "processors.hpp"
+
+
 using Vertex = int;
-using client_graph = std::unique_ptr<Graph<Vertex>>;
-static std::vector<pollfd> file_descriptors;
-using namespace Graph_implementation;
-static std::unordered_map<int,client_graph> client_graphs;
+
+int main() {
+    std::unordered_map<int, std::shared_ptr<Graph<Vertex>>> client_graphs;
+    std::vector<pollfd> fds;
+    ServerSocketTCP server(fds);
+    int listen_fd = server.get_fd();
+    std::cout << "[Server listening on port " << PORT << " TCP]" << std::endl;
 
 
-int make_non_blocking(int fd);
-
-int make_non_blocking(int fd){
-    int flags = fcntl(fd,F_GETFL,0);
-    return fcntl(fd,F_SETFL,flags |O_NONBLOCK);
-}
-
-
-
-int main(){
-
-    int listen_fd;
-    addrinfo hints{},*res;
-    hints.ai_family = AF_INET;
-    hints.ai_protocol = SOCK_STREAM;
-    hints.ai_protocol = AI_PASSIVE;
-
-   if (getaddrinfo(IP, PORT, &hints, &res) != 0) {
-        perror("getaddrinfo");
-        return EXIT_FAILURE;
-    }
-    listen_fd = socket(res->ai_family,res->ai_socktype,res->ai_protocol);
-    if(listen_fd < 0){
-        freeaddrinfo(res);
-        perror("socket");
-        return EXIT_FAILURE;
-    }
-
-    if(bind(listen_fd,res->ai_addr,res->ai_addrlen) < 0){
-        freeaddrinfo(res);
-        perror("bind");
-        return EXIT_FAILURE;
-    }
-
-
-    if(listen(listen_fd,BACKLOG) < 0){
-        freeaddrinfo(res);
-        close(listen_fd);
-        perror("listen");
-        return EXIT_FAILURE;
-    }
-
-
-
-    freeaddrinfo(res);
-
-    file_descriptors.push_back({listen_fd,POLLIN,DEFAULT_REVENTS});
-
-
-    std::cout << "[Server is listening on Port " << PORT <<" TCP]" <<std::endl;
-
-    char buffer[BUF_SIZE];
-
-    while (true){
-        int nready = ::poll(file_descriptors.data(),file_descriptors.size(),NO_TIMEOUT);
+    while (true) {
+        int nready = poll(fds.data(), fds.size(), NO_TIMEOUT);
         if (nready < 0) {
+            
             perror("poll");
             break;
         }
 
-        for(size_t i = 0; file_descriptors.size(); ++i){
-            auto &p = file_descriptors[i];
-            if(p.revents & POLLIN){
-                --nready;
+        for (size_t i = 0; i < fds.size() && nready > 0; ++i) {
+            auto &p = fds[i];
+           
+            if (!(p.revents & POLLIN)) continue;
+            --nready;
 
-                if(p.fd == listen_fd){
-                    int client_fd = accept(listen_fd,nullptr,nullptr);
-                    if(client_fd >= 0){
-                    make_non_blocking(client_fd);
-                    file_descriptors.push_back({client_fd,POLLIN,DEFAULT_REVENTS});
-                    std::cout <<"Client " <<client_fd << " Connected" << std::endl;
-                   }
+            int fd = p.fd;
+            if (fd == listen_fd) {
+                int client_fd = server.accept_connections();
+                if (client_fd < 0) continue;
+
+                server.make_non_blocking(client_fd);
+                fds.push_back({ client_fd, POLLIN, 0 });
+
+
+                // Handshake: receive vertex count
+
+                server.send_to_client(client_fd,"Enter the Amount of vertices");
+                std::string init;
+                try {
+                    init = server.recv_from_client(client_fd);
+                } catch (...) {
+                    ::close(client_fd);
+                    continue;
+                }
+                
+                int nVertices = std::stoi(init);
+                auto g = std::make_shared<Graph<Vertex>>(nVertices);
+                client_graphs[client_fd] = g;
+
+                // Build a directed clique (no self-edges)
+                for (int v = 0; v < nVertices; ++v) {
+                    for (int u = 0; u < nVertices; ++u) {
+                        if (u == v) continue;
+                        g->add_edge(v, u, 1.0, true);
+                    }
+                }
+
+                
+                std::cout << "Client " << client_fd
+                          << " connected, graph of "
+                          << nVertices << " vertices created" << std::endl;
+                
+                send_menu(server,client_fd);
+
+                fds.push_back({ client_fd, POLLIN, 0 });
+            } else {
+   
+                std::string msg = server.recv_from_client(fd);
+                if (msg.empty()) {
+                    ::close(fd);
+                    client_graphs.erase(fd);
+                    fds.erase(fds.begin() + i);
+                    --i;
+                    std::cout << "Client " << fd << " disconnected" << std::endl;
                 } else {
-                    int n = read(file_descriptors[i].fd,buffer,BUF_SIZE);
-                    if(n <= 0){
-                        close(file_descriptors[i].fd);
-                        file_descriptors.erase(file_descriptors.begin() + 1);
-                        --i;
-                        continue;
-                    }
+                    auto &g = *client_graphs[fd];
+                    Request<Vertex> req = parse_request<Vertex>(msg, g);
 
-                    std::string msg(buffer, n);
-                    Request<Vertex> req = parese_request(msg);
-                    
-                    auto algo = AlgorithmsFactory<Vertex>::create(req);
-                    Response resp;
+                     std::unique_ptr<AlgorithmIO<Vertex>> algo = AlgorithmsFactory<Vertex>::create(req);
+                    Response resp = algo
+                        ? algo->run(req)
+                        : Response{ false, "Unknown algorithm: " + req.name };
 
-                    if(!algo){
-                        resp = {false,"Unknown Algorithm: " + req.name};
-                    }
-                    else{
-                        resp = algo->run(req);
-                    }
-
-
-                std::string reply = (resp.ok ? "OK|" : "ERR|") + resp.ok;
-                write(file_descriptors[i].fd, reply.c_str(), reply.size());
+                    std::string wire = serialize_response(resp);
+                    server.send_to_client(fd, wire);
+                    send_menu(server,fd);
                 }
             }
         }
     }
-    
-close(listen_fd);
-return 0;
+
+    ::close(listen_fd);
+    return 0;
 }

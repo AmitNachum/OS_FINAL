@@ -1,9 +1,9 @@
 #pragma once
-#include "AlgoIO.hpp"
 #include <vector>
 #include <memory>
 #include <sstream>
 #include <string>
+
 
 // Strategy for computing an Eulerian circuit
 // Request<T> is assumed to carry a ready-to-use graph with
@@ -12,16 +12,21 @@
 template <typename T>
 class EulerAlgo : public AlgorithmIO<T> {
 public:
-    Response run(const Request<T>& req) override {
+    virtual Response run(const Request<T>& req) override {
         // Attempt to find an Eulerian circuit
-        std::unique_ptr<std::vector<T>> circuit = req.graph.find_euler_circuit();
+        std::unique_ptr<std::vector<T>> circuit = req.graph.find_euler_circut();
         if (!circuit || circuit->empty()) {
             return {false, "Graph is not Eulerian"};
         }
 
        
         std::ostringstream oss;
-        oss << *circuit;
+        for (size_t i = 0; i < circuit->size(); ++i) {
+            oss << (*circuit)[i];
+            if (i != circuit->size() - 1)
+                oss << " ";
+        }
+
         return {true, oss.str()};
     }
 };

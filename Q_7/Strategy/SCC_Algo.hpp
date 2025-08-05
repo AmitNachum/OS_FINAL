@@ -1,5 +1,4 @@
 #pragma once
-#include "AlgoIO.hpp"
 #include <vector>
 #include <string>
 #include <sstream>
@@ -10,7 +9,7 @@
 template <typename T>
 class SCC_Algo : public AlgorithmIO<T> {
 public:
-    Response run(const Request<T>& req) override {
+    virtual Response run(const Request<T>& req) override {
 
         std::vector<std::vector<T>> scc_res = req.graph.kosarajus_algorithm_scc();
 

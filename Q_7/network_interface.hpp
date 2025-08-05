@@ -1,4 +1,5 @@
 #pragma once
+// System headers
 #include <iostream>
 #include <cstring>
 #include <getopt.h>
@@ -7,11 +8,10 @@
 #include <sys/types.h>
 #include <memory>
 #include <cstdlib>
-#include "../Q_1_to_4/Graph/Graph.hpp"
 #include <vector>
 #include <unordered_map>
 #include <poll.h>
-#include <arpa/inet.h> 
+#include <arpa/inet.h>
 #include <algorithm>
 #include <random>
 #include <sstream>
@@ -19,13 +19,13 @@
 #include <string>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <poll.h>
 #include <fcntl.h>
-#include <algorithm>
 #include <cctype>
 #include <stdexcept>
-#include <cstring>
-#include <unistd.h>
+
+// Project headers
+#include "../Q_1_to_4/Graph/Graph.hpp"
+
 
 
 

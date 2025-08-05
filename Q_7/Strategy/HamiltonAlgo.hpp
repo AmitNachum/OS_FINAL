@@ -1,5 +1,4 @@
 #pragma once
-#include "AlgoIO.hpp"
 
 
 // Strategy for finding a Hamiltonian cycle
@@ -8,7 +7,7 @@
 template <typename T>
 class HamiltonAlgo : public AlgorithmIO<T> {
 public:
-     Response run(const Request<T>& req) override {
+     virtual Response run(const Request<T>& req) override {
         if(!req.start) 
            return {false,"Missing start"};
 

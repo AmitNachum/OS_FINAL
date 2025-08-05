@@ -1,12 +1,13 @@
-#include "AlgoIO.hpp"
+#pragma once
+
 
 
 
 template <typename T>
 
-class MaxFlow : AlgorithmIO<T>{
+class MaxFlow : public AlgorithmIO<T>{
 
-    Response run(const Request<T>& req ) override{
+    virtual Response run(const Request<T>& req ) override{
         if(!req.source||!req.sink) 
         return {false,"Missing source or sink"};
 
