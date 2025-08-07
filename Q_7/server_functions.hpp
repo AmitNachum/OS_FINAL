@@ -18,13 +18,18 @@ const std::vector<std::string> ALGO_NAMES = {
     "maxflow"
 };
 
-    void send_menu(ServerSocketTCP& server, int client_fd) {
+    inline void send_menu(ServerSocketTCP& server, int client_fd, bool directed) {
         std::ostringstream menu;
-        menu << "MENU|";
-        for (size_t i = 0; i < ALGO_NAMES.size(); ++i) {
-            menu << (i + 1) << ":" << ALGO_NAMES[i];
-            if (i + 1 < ALGO_NAMES.size()) menu << ",";
+        menu << "\n=== Algorithm Menu ===\n"
+            << "Choose algorithm using format:\n"
+            << "1) print       : print|||\n"
+            << "2) euler       : euler||| (only for undirected)\n"
+            << "3) hamilton    : hamilton|<start_vertex>||\n"
+            << "4) mst         : mst|<start_vertex>|| (only for undirected)\n";
+        if (directed) {
+            menu << "5) scc         : scc|||\n"
+                << "6) maxflow     : maxflow||<source>|<sink>\n";
         }
-        menu << "\n";
+        menu << "Type 'exit' to disconnect.\n";
         server.send_to_client(client_fd, menu.str());
     }
