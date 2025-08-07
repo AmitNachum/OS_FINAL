@@ -41,7 +41,7 @@ static inline std::string tolower_copy(std::string s) {
 int main() {
     // One graph per connected client
     std::unordered_map<int, std::shared_ptr<Graph<Vertex>>> client_graphs;
-    // true = directed, false = undirected (affects validation & menu)
+    // true = directed, false = undirected (kept for printing/menu only)
     std::unordered_map<int, bool> graph_direction;
 
     std::vector<pollfd> fds;
@@ -112,16 +112,17 @@ int main() {
                         std::getline(ss, tok, '|'); int n = std::stoi(tok);
                         std::getline(ss, tok, '|'); bool directed = (tok == "1");
 
-                        auto g = std::make_shared<Graph<Vertex>>(n);
+                        // Build the graph with the directed flag INSIDE the class
+                        auto g = std::make_shared<Graph<Vertex>>(n, directed);
                         client_graphs[fd] = g;
-                        graph_direction[fd] = directed;
+                        graph_direction[fd] = directed; // for menu/printing only
 
                         std::cout << "Initialized graph for client " << fd
                                   << " with " << n << " vertices ("
                                   << (directed ? "directed" : "undirected") << ")\n";
 
                         // Always send a fresh menu right after init
-                        send_menu(server, fd, directed);
+                        send_menu(server, fd);
                         continue;
                     }
 
@@ -135,8 +136,9 @@ int main() {
                         std::getline(ss, tok, '|'); double w = std::stod(tok);
 
                         if (client_graphs.count(fd)) {
-                            // Add according to the graph's directedness
-                            client_graphs[fd]->add_edge(u, v, w, graph_direction[fd]);
+                            // Add edge according to the graph's internal directed_ flag.
+                            // NOTE: we no longer pass directed here.
+                            client_graphs[fd]->add_edge(u, v, w);
                         }
                         // No immediate response; the client will request an action next
                         continue;
@@ -145,12 +147,11 @@ int main() {
                     // From here on we expect an action on an existing graph
                     if (!client_graphs.count(fd)) {
                         server.send_to_client(fd, "ERR|Graph not initialized yet.\n");
-                        send_menu(server, fd, false);
+                        send_menu(server, fd);
                         continue;
                     }
 
                     auto& g = *client_graphs[fd];
-                    bool directed = graph_direction[fd];
 
                     // ---------------------- PRINT ----------------------
                     if (cmd == "print") {
@@ -158,30 +159,20 @@ int main() {
                         std::ostringstream out;
                         out << g << "\n";
                         server.send_to_client(fd, out.str());
-                        send_menu(server, fd, directed);
+                        send_menu(server, fd);
                         continue;
                     }
 
                     // ------------------ ALGORITHMS ---------------------
-                    // Parse the request using factory-compatible format
+                    // Parse the request using factory-compatible format.
+                    // DO NOT block by graph type here — the Graph class dispatches internally.
                     Request<Vertex> req = parse_request<Vertex>(rawline, g);
-
-                    // Validate per graph type BEFORE running
-                    bool supported = true;
-                    if ((cmd == "mst" || cmd == "euler") && directed) supported = false;
-                    if (cmd == "maxflow" && !directed) supported = false;
-
-                    if (!supported) {
-                        server.send_to_client(fd, "ERR|This algorithm is not supported for the current graph type.\n");
-                        send_menu(server, fd, directed);
-                        continue;
-                    }
 
                     try {
                         std::unique_ptr<AlgorithmIO<Vertex>> algo = AlgorithmsFactory<Vertex>::create(req);
                         Response resp = algo
                             ? algo->run(req)
-                            : Response{ false, "Unknown algorithm: " + cmd };
+                            : Response{ false, std::string("Unknown algorithm: ") + cmd };
 
                         // Guard against empty string responses from algorithms
                         if (resp.response.empty()) {
@@ -195,7 +186,7 @@ int main() {
                     }
 
                     // Always end with the menu so the client knows the response is complete
-                    send_menu(server, fd, directed);
+                    send_menu(server, fd);
                 }
 
             } catch (...) {

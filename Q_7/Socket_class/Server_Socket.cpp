@@ -64,9 +64,19 @@ int ServerSocketTCP::get_fd() const
 
 int ServerSocketTCP::make_non_blocking(int fd) const
 {
-    int flags = fcntl(fd,F_GETFL,0);
-    return fcntl(fd,F_SETFD,flags | O_NONBLOCK);
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1) {
+        perror("fcntl - get flags");
+        return -1;
+    }
+    // FIX: use F_SETFL (not F_SETFD)
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+        perror("fcntl - set non-blocking");
+        return -1;
+    }
+    return 0;
 }
+
 
 std::vector<pollfd>&ServerSocketTCP::get_fds()
 {
