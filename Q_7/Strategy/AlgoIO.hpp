@@ -5,7 +5,6 @@
 #include <optional>
 
 #include "../../Q_1_to_4/Graph/Graph.hpp"
-#include "../Factory/Factory_Algorithms.hpp"
 
 
 using namespace Graph_implementation;

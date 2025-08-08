@@ -41,8 +41,10 @@ static inline std::string tolower_copy(std::string s) {
 int main() {
     // One graph per connected client
     std::unordered_map<int, std::shared_ptr<Graph<Vertex>>> client_graphs;
-    // true = directed, false = undirected (kept for printing/menu only)
+    // for printing/menu only (kept like before)
     std::unordered_map<int, bool> graph_direction;
+    // NEW: per-client receive buffer for partial lines
+    std::unordered_map<int, std::string> recv_buf;
 
     std::vector<pollfd> fds;
     ServerSocketTCP server(fds);
@@ -71,32 +73,43 @@ int main() {
 
                 server.make_non_blocking(client_fd);
                 // accept_connections() already pushed client_fd to fds inside ServerSocketTCP
-
                 std::cout << "Client " << client_fd << " connected.\n";
                 continue;
             }
 
             // Handle data from a client
             try {
-                std::string msg = server.recv_from_client(fd);
-                if (msg.empty()) {
+                // read one chunk (non-blocking)
+                std::string chunk = server.recv_from_client(fd);
+                if (chunk.empty()) {
                     // client closed
                     ::close(fd);
                     client_graphs.erase(fd);
                     graph_direction.erase(fd);
+                    recv_buf.erase(fd); // clear its pending bytes
                     fds.erase(fds.begin() + i);
                     --i;
                     std::cout << "Client " << fd << " disconnected.\n";
                     continue;
                 }
 
-                std::istringstream in(msg);
-                std::string rawline;
+                // append to this client's accumulator
+                std::string& buf = recv_buf[fd];
+                buf += chunk;
 
-                while (std::getline(in, rawline)) {
+                // extract complete lines (newline-terminated)
+                size_t start = 0;
+                while (true) {
+                    size_t nl = buf.find('\n', start);
+                    if (nl == std::string::npos) break;
+
+                    std::string rawline = buf.substr(start, nl - start);
+                    start = nl + 1;
+
+                    // normalize (strip CR if CRLF)
+                    if (!rawline.empty() && rawline.back() == '\r') rawline.pop_back();
+
                     if (rawline.empty()) continue;
-
-                    // Normalize a single line command
                     trim(rawline);
                     if (rawline.empty()) continue;
 
@@ -137,7 +150,6 @@ int main() {
 
                         if (client_graphs.count(fd)) {
                             // Add edge according to the graph's internal directed_ flag.
-                            // NOTE: we no longer pass directed here.
                             client_graphs[fd]->add_edge(u, v, w);
                         }
                         // No immediate response; the client will request an action next
@@ -155,7 +167,6 @@ int main() {
 
                     // ---------------------- PRINT ----------------------
                     if (cmd == "print") {
-                        // Use the existing operator<< to print the adjacency list with weights
                         std::ostringstream out;
                         out << g << "\n";
                         server.send_to_client(fd, out.str());
@@ -169,7 +180,9 @@ int main() {
                     Request<Vertex> req = parse_request<Vertex>(rawline, g);
 
                     try {
-                        std::unique_ptr<AlgorithmIO<Vertex>> algo = AlgorithmsFactory<Vertex>::create(req);
+                        std::unique_ptr<AlgorithmIO<Vertex>> algo =
+                            AlgorithmsFactory<Vertex>::create(req);
+
                         Response resp = algo
                             ? algo->run(req)
                             : Response{ false, std::string("Unknown algorithm: ") + cmd };
@@ -189,11 +202,15 @@ int main() {
                     send_menu(server, fd);
                 }
 
+                // keep only the unconsumed tail (no newline yet)
+                if (start > 0) buf.erase(0, start);
+
             } catch (...) {
                 std::cerr << "Error handling client " << fd << ". Disconnecting.\n";
                 ::close(fd);
                 client_graphs.erase(fd);
                 graph_direction.erase(fd);
+                recv_buf.erase(fd);
                 fds.erase(fds.begin() + i);
                 --i;
             }
