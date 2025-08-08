@@ -43,8 +43,9 @@ namespace Graph_implementation{
 struct pair_hash {
     template <typename A, typename B>
     std::size_t operator()(const std::pair<A,B>& pair) const{
+        // Simple pair hash: XOR of hashed components (with shift)
         return std::hash<A>()(pair.first) ^ (std::hash<B>()(pair.second) << 1);
-    };
+    }
 };
 
 template<typename K>
@@ -62,7 +63,7 @@ class Graph{
     size_t vertices_amount;
     std::unordered_map<T, std::unordered_set<std::pair<T, double>, pair_hash>> graph;
     T start_vertex{};
-    bool directed_{false}; // <--- global graph mode
+    bool directed_{false}; // global graph mode
 
    public:
     // directed has default false to keep backward compatibility
@@ -71,17 +72,23 @@ class Graph{
     ~Graph() = default;
     Graph(const Graph &other) = delete;
     Graph& operator=(const Graph &other) = delete;
-    Graph(Graph &&other) = delete;
-    Graph& operator=(Graph &&other) = delete;
+    Graph(Graph &&other) = default;
+    Graph& operator=(Graph &&other) = default;
 
     bool is_directed() const { return directed_; }
     void set_directed(bool d) { directed_ = d; }
 
     void add_vertex(const T &vertex){
-        if(graph.empty()){
-            start_vertex = vertex;
+        // Ensure the vertex key exists and initialize adjacency if new
+        if (graph.find(vertex) == graph.end()) {
+            if(graph.empty()){
+                // First inserted vertex becomes the start anchor
+                start_vertex = vertex;
+            }
+            graph.emplace(vertex, std::unordered_set<std::pair<T,double>, pair_hash>{});
+            // Keep vertices_amount synchronized with actual container size
+            vertices_amount = graph.size();
         }
-        graph[vertex] = {};
     }
 
     T& get_first(){ return start_vertex; }
@@ -89,35 +96,72 @@ class Graph{
     // Adds an edge using the graph's directedness flag.
     void add_edge(const T &u, const T &v, double w, bool /*ignored*/ = false){
         // NOTE: external 'directed' param is ignored; we use directed_ consistently.
-        auto& nbrs = graph[u];
+
+        // Ensure both endpoints exist to keep degrees/queries consistent
+        if (graph.find(u) == graph.end()) {
+            if (graph.empty()) start_vertex = u; // anchor on very first use
+            graph.emplace(u, std::unordered_set<std::pair<T,double>, pair_hash>{});
+        }
+        if (graph.find(v) == graph.end()) {
+            graph.emplace(v, std::unordered_set<std::pair<T,double>, pair_hash>{});
+        }
+        // Maintain vertices_amount invariant
+        vertices_amount = graph.size();
+
+        auto& nbrs_u = graph[u];
 
         if(!directed_){
-            auto it = std::find_if(nbrs.begin(), nbrs.end(),
+            // Insert u<->v once (avoid multi-edges in the set)
+            auto it = std::find_if(nbrs_u.begin(), nbrs_u.end(),
                 [&](auto const &pr){ return pr.first == v; });
-            if(it == nbrs.end()){
+            if(it == nbrs_u.end()){
                 graph[u].insert({v,w});
                 graph[v].insert({u,w});
             }
         } else {
-            auto it = std::find_if(nbrs.begin(), nbrs.end(),
+            auto it = std::find_if(nbrs_u.begin(), nbrs_u.end(),
                 [&](auto const &pr){ return pr.first == v; });
-            if(it == nbrs.end()){
+            if(it == nbrs_u.end()){
                 graph[u].insert({v,w});
             }
         }
     }
 
     void remove_edge(const T &u, const T &v, double w, bool /*ignored*/ = false){
-        if(!directed_){
-            graph[u].erase({v,w});
-            graph[v].erase({u,w});
-        } else {
-            graph[u].erase({v,w});
+        // Robust removal: try exact (v,w). If not present, remove by target v anyway.
+        auto it_u = graph.find(u);
+        if (it_u == graph.end()) return;
+
+        auto& set_u = it_u->second;
+
+        // First attempt: exact erase by pair (v,w)
+        size_t erased = set_u.erase({v,w});
+
+        if (erased == 0) {
+            // Fallback: find any edge to v (weight-agnostic) and erase it
+            auto it = std::find_if(set_u.begin(), set_u.end(),
+                                   [&](const auto& pr){ return pr.first == v; });
+            if (it != set_u.end()) set_u.erase(it);
         }
+
+        if(!directed_){
+            auto it_v = graph.find(v);
+            if (it_v == graph.end()) return;
+            auto& set_v = it_v->second;
+            erased = set_v.erase({u,w});
+            if (erased == 0) {
+                auto it = std::find_if(set_v.begin(), set_v.end(),
+                                       [&](const auto& pr){ return pr.first == u; });
+                if (it != set_v.end()) set_v.erase(it);
+            }
+        }
+
+        // Note: we intentionally do not remove isolated vertices here to keep references stable.
     }
 
     // ======================= Common helpers =======================
     size_t degree(const T &v) const{
+        // For directed graphs this equals out-degree.
         auto it = graph.find(v);
         return it != graph.end() ? it->second.size() : 0;
     }
@@ -128,6 +172,7 @@ class Graph{
     }
 
     size_t in_degree(const T& v) const {
+        // O(V+E) scan. Consider caching if called frequently.
         size_t deg = 0;
         for (const auto& [u, nbrs] : graph) {
             for (const auto& pr : nbrs) {
@@ -138,6 +183,7 @@ class Graph{
     }
 
     bool all_even_degree() const{
+        // Undirected check: every vertex has even degree
         for(const auto&[v,_]: graph){
             if(degree(v) % 2 != 0) return false;
         }
@@ -285,6 +331,7 @@ class Graph{
 
    private:
     std::vector<Edge<T>> prim_undirected_impl(const T& source){
+        // Note: if the graph is disconnected, this returns an MST for the source's component only.
         auto &adj_map = this->graph;
         std::priority_queue<Edge<T>,std::vector<Edge<T>>,std::greater<Edge<T>>> pq;
         std::unordered_set<T> inMST;
@@ -303,7 +350,11 @@ class Graph{
             if(v != u) result.emplace_back(u, v, w); // store as (u->v, w)
             inMST.insert(v);
 
-            for(auto& [nbr,wt]: adj_map[v]){
+            // If v does not exist (absent key), skip safely
+            auto it = adj_map.find(v);
+            if (it == adj_map.end()) continue;
+
+            for(auto& [nbr,wt]: it->second){
                 if(!inMST.count(nbr)) pq.push(Edge<T>(v,nbr,wt));
             }
         }
@@ -416,8 +467,6 @@ class Graph{
         }
     }
 
-
-
    public:
     // ======================= SCC / CC =======================
     // Public facade: SCC for directed, CC for undirected
@@ -430,6 +479,7 @@ class Graph{
     using adj_list = std::unordered_map<T,std::unordered_set<std::pair<T,double>,pair_hash>>;
 
     adj_list transpose_graph_directed_() const {
+        // Reverse all directed edges
         adj_list reversed;
         for(const auto& [v,_] : graph) reversed[v] = {};
         for(const auto& [u,values] : graph)
@@ -438,7 +488,10 @@ class Graph{
         return reversed;
     }
 
+    // NOTE: kept for backward compatibility, but not used anymore.
     void first_dfs(const T& vertex,std::stack<T>& stack_scc){
+        // This version uses a local visited, which is not shared across starts.
+        // It is intentionally left as-is and unused, to avoid changing signatures.
         std::stack<std::pair<T,bool>> st;
         std::unordered_set<T> vis;
         st.push({vertex,false});
@@ -454,6 +507,7 @@ class Graph{
 
     void second_dfs(const T& vertex, const adj_list& gt,
                     std::unordered_set<T>& vis, std::vector<T>& comp){
+        // Standard iterative DFS on the transposed graph
         std::stack<T> st; st.push(vertex);
         vis.insert(vertex);
         while(!st.empty()){
@@ -465,9 +519,32 @@ class Graph{
     }
 
     std::vector<std::vector<T>> kosaraju_directed_impl(){
-        std::stack<T> order;
+        // Fixed first pass: one global 'vis' shared across all starts, computing a single order stack.
         std::unordered_set<T> vis;
-        for(const auto& [v,_] : graph) if(!vis.count(v)) first_dfs(v, order);
+        std::stack<T> order;
+
+        // Local lambda to perform DFS and record finish order
+        auto dfs1 = [&](const T& s){
+            std::stack<std::pair<T,bool>> st;
+            st.push({s,false});
+            while(!st.empty()){
+                auto [u,back] = st.top(); st.pop();
+                if (back) { order.push(u); continue; }
+                if (vis.count(u)) continue;
+                vis.insert(u);
+                st.push({u,true}); // postorder marker
+                auto it = graph.find(u);
+                if (it != graph.end()) {
+                    for (const auto& [nbr,_w] : it->second) {
+                        if (!vis.count(nbr)) st.push({nbr,false});
+                    }
+                }
+            }
+        };
+
+        for (const auto& [v,_] : graph) {
+            if (!vis.count(v)) dfs1(v);
+        }
 
         auto gt = transpose_graph_directed_();
         vis.clear();
@@ -506,12 +583,19 @@ class Graph{
     double edmon_karp_algorithm(const T& source, const T& sink){
         using residual_graph = std::unordered_map<T,std::vector<Edge<T>>>;
         auto convert_to_residual = [&](){
+            // Build residual graph: forward edges with capacity=weight; ensure reverse edges exist with 0 cap.
             residual_graph rs;
-            for (const auto& [u, neighbors] : graph)
-                for (const auto& [v, cap] : neighbors)
-                    rs[u].emplace_back(u, v, cap, 0.0);
             for (const auto& [u, neighbors] : graph) {
                 for (const auto& [v, cap] : neighbors) {
+                    rs[u].emplace_back(u, v, cap, 0.0);
+                    // Ensure existence of both endpoint keys
+                    if (!rs.count(v)) rs[v] = {};
+                }
+            }
+            // Add missing reverse edges with zero capacity
+            for (const auto& [u, neighbors] : graph) {
+                for (const auto& [v, cap] : neighbors) {
+                    (void)cap;
                     bool rev = false;
                     if (rs.count(v))
                         for (const auto& e : rs.at(v)) if (e.vertex_r == u){ rev=true; break; }
@@ -522,6 +606,7 @@ class Graph{
         };
 
         auto bfs = [&](const residual_graph& rs, std::unordered_map<T,T>& parent)->bool{
+            // Standard BFS on residual graph to find augmenting path
             std::unordered_set<T> vis;
             std::queue<T> q; q.push(source); vis.insert(source);
             while(!q.empty()){
@@ -545,12 +630,14 @@ class Graph{
         std::unordered_map<T,T> parent;
 
         while(bfs(rs,parent)){
+            // Find bottleneck capacity along the path
             double add = std::numeric_limits<double>::infinity();
             for (T v=sink; v!=source; v=parent[v]){
                 T u = parent[v];
                 for (const auto& e : rs[u])
                     if (e.vertex_r==v){ add = std::min(add, e.residual_capacity()); break; }
             }
+            // Augment along the path
             for (T v=sink; v!=source; v=parent[v]){
                 T u = parent[v];
                 for (auto &e : rs[u]) if (e.vertex_r==v){ e.current_flow += add; break; }
@@ -583,11 +670,14 @@ class Graph{
                            const T& start,
                            std::vector<T>& path,
                            std::unordered_set<T>& vis){
-        if(path.size() == vertices_amount){
+        // Use actual graph size instead of vertices_amount to avoid stale counts
+        if(path.size() == graph.size()){
             if(has_edge(v,start)){ path.push_back(start); return true; }
             return false;
         }
-        for(const auto& [nbr,_w]: graph[v]){
+        auto it = graph.find(v);
+        if (it == graph.end()) return false;
+        for(const auto& [nbr,_w]: it->second){
             if(!vis.count(nbr)){
                 vis.insert(nbr);
                 path.push_back(nbr);

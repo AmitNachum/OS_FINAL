@@ -11,23 +11,23 @@ using namespace Graph_implementation;
 int main() {
     cout << "=== Generating Graph ===" << endl;
 
-    // Generate random number of vertices between 4 and 8 for a valid Eulerian case
+    // Generate random number of vertices between 4 and 8 (potentially Eulerian)
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dist(4, 8); // Ensure it's even to be potentially Eulerian
+    std::uniform_int_distribution<> dist(4, 8);
     size_t n = static_cast<size_t>(dist(gen));
 
     Graph<int> G(n);
 
-    // Add n vertices labeled 1 to n
+    // Add n vertices labeled 1..n
     for (int i = 1; i <= static_cast<int>(n); ++i) {
         G.add_vertex(i);
     }
 
-    // Connect vertices in a cycle: 1-2-3-...-n-1 to ensure Eulerian
+    // Connect vertices in a cycle 1-2-...-n-1 to make degrees even
     for (int i = 1; i <= static_cast<int>(n); ++i) {
         int u = i;
-        int v = (i % n) + 1;
+        int v = (i % static_cast<int>(n)) + 1;
         G.add_edge(u, v, 1);
     }
 
@@ -43,13 +43,14 @@ int main() {
 
     try {
         cout << "\n=== Finding Euler Circuit ===" << endl;
-        std::unique_ptr<std::vector<int>> circuit = G.find_euler_circut();
+        // euler_circuit() returns std::vector<int>, not a unique_ptr
+        std::vector<int> circuit = G.euler_circuit();
         cout << "Euler Circuit: ";
-        for (int v : *circuit) {
-            cout << v << " ";
+        for (int v : circuit) {
+            cout << v << ' ';
         }
         cout << endl;
-    } catch (const std::exception &e) {
+    } catch (const std::exception& e) {
         cout << "Error: " << e.what() << endl;
     }
 
