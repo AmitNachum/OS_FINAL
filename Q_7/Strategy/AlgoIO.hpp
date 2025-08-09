@@ -6,7 +6,8 @@
 
 #include "../../Q_1_to_4/Graph/Graph.hpp"
 
-
+/*std::optional<T> is a wrapper template that may
+contain a type T value or no value at all(std::nullopt)*/
 using namespace Graph_implementation;
 
 template <typename T>

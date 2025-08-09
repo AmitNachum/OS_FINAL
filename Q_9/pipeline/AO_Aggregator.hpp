@@ -7,12 +7,14 @@
 #include "Response.hpp"
 #include "Constants.hpp"
 
+
+//==== Collection of each Stage's result ======
 namespace Q9 {
 
 // Collects results for a single job and formats output identical to stage 8.
 struct PartialSet {
     int client_fd = -1;
-    int count = 0;
+    int count = 0; //Count for the workload of each stage must equal 4
     bool directed = true;
     std::string graph_header; // "===== Graph =====\n" + dump + "\n\n"
 
@@ -38,7 +40,7 @@ public:
     }
 
 protected:
-    void process(Result&& r) override {
+    void process(Result&& r) override { // Processing the result of the chosen Algorithm
         std::unique_lock<std::mutex> lk(m_mtx);
         auto it = m_jobs.find(r.job_id);
         if (it == m_jobs.end()) return; // unknown or already flushed
@@ -56,7 +58,9 @@ protected:
         }
         ps.count++;
 
-        if (ps.count >= REQUIRED_RESULTS_PER_JOB) {
+        if (ps.count >= REQUIRED_RESULTS_PER_JOB) {/*If we have all the 4 stage's result Send 
+                                                    send to the client the respond via the 
+                                                    outgoing struct*/
             const int fd = ps.client_fd;
             std::string payload = format_payload(ps);
             m_jobs.erase(it);
@@ -121,8 +125,8 @@ private:
     }
 
 private:
-    BlockingQueue<Outgoing>& m_out;
-    std::unordered_map<std::string, PartialSet> m_jobs;
+    BlockingQueue<Outgoing>& m_out;//Outgoing Results ready to be sent to each client
+    std::unordered_map<std::string, PartialSet> m_jobs;// mapping the each job to thier partial set
     std::mutex m_mtx;
 };
 

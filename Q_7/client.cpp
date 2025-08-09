@@ -3,7 +3,8 @@
 #include <iostream>
 #include <string>
 #include <random>
-
+/*special keyword, if possible computation
+values or function at compile time*/
 static constexpr size_t CHUNK = 4096;
 static const std::string MENU_SENTINEL = "Type 'exit' to disconnect.";
 
@@ -31,6 +32,8 @@ int main() {
         std::cout << "Maximum edge weight (int): ";
         std::cin >> max_weight;
 
+        /*Using a uniform Distribution for generating the Graph
+        and its edges*/
         std::mt19937 rng(std::random_device{}());
         std::uniform_real_distribution<double> prob_dist(0.0, 1.0);
         std::uniform_int_distribution<int> weight_dist(1, max_weight);
@@ -49,7 +52,9 @@ int main() {
             }
         }
     } else {
-        client.send_to_server("init|" + std::to_string(n) + "|" + (directed ? std::string("1") : std::string("0")) + "\n");
+        client.send_to_server("init|" + std::to_string(n) + "|" + 
+        (directed ? std::string("1") : std::string("0")) + "\n");
+
         std::cout << "Enter edges as: from to weight (enter -1 -1 -1 to stop):\n";
         while (true) {
             int u, v, w;
@@ -63,7 +68,7 @@ int main() {
 
     std::cout << "[Client] Graph sent. Receiving menu...\n";
 
-    auto recv_until_menu = [&]() {
+    auto recv_until_menu = [&]() { // lambda function for message receiving 
         std::string buf, chunk;
         while (true) {
             chunk = client.recv_from_server(CHUNK);
@@ -82,7 +87,7 @@ int main() {
         std::cout << "[Client] > ";
 
         std::string input;
-        if (std::cin.peek() == '\n') std::cin.ignore();
+        if (std::cin.peek() == '\n') std::cin.ignore();//skip any '\n' escape sequence
         std::getline(std::cin, input);
 
         if (input == "exit") break;

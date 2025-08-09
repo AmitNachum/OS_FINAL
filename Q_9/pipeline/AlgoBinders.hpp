@@ -12,7 +12,7 @@
 
 namespace Q9 {
 
-// Helper that mimics your stage-8 run_request()
+// Helper that mimics stage-8 run_request()
 static inline Response run_request_name(GraphT& g,
                                         const std::string& name,
                                         std::optional<int> start = {},
@@ -28,11 +28,13 @@ static inline Response run_request_name(GraphT& g,
     return algo->run(req);
 }
 
+//======Functions that returns the Result struct based on the Algorithm Respond struct=======
+
 inline Result run_mst(const Job& job) {
-    Result r; r.job_id = job.job_id; r.kind = AlgoKind::MST;
+    Result r; r.job_id = job.job_id; r.kind = AlgoKind::MST;//Set the Result struct
     try {
-        const int first = job.graph->get_first();
-        Response rr = run_request_name(*job.graph, "mst", /*start=*/first);
+        const int first = job.graph->get_first();// get the first vertex
+        Response rr = run_request_name(*job.graph, "mst", /*start=*/first);//Set the response fields
         r.ok = rr.ok; r.value = rr.response;
         if (!r.ok && r.value.empty()) r.error_msg = "MST failed";
     } catch (const std::exception& e) {

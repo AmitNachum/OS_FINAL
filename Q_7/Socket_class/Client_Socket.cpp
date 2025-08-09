@@ -28,7 +28,9 @@ void ClientSocketTCP::init_client(const char *ip, const char *port)
         }
     freeaddrinfo(res);
 }
-
+/*Non_blocking function to prevent any asynchronic 
+function from blocking and halting the entire
+program*/
 void ClientSocketTCP::make_non_blocking() const {
     int flags = fcntl(sock_fd, F_GETFL, 0);
     if (flags == -1) {
