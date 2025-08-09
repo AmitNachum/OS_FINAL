@@ -36,14 +36,14 @@ public:
     std::optional<T> pop() {
         std::unique_lock<std::mutex> lk(m_mtx);
         m_cv_not_empty.wait(lk, [&]{ return m_closed || !m_q.empty(); });
-        if (m_q.empty()) return std::nullopt; // closed and empty
+        if (m_q.empty()) return std::nullopt; // closed and empty(nullopt since we have an optional ptr)
         T item = std::move(m_q.front());
         m_q.pop_front();
         m_cv_not_full.notify_one();
         return item;
     }
 
-    void close() {
+    void close() {//A shutdown and notify all working threads to wrap up and terminate
         std::lock_guard<std::mutex> lk(m_mtx);
         m_closed = true;
         m_cv_not_empty.notify_all();

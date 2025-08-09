@@ -10,6 +10,8 @@
 #include "./Socket_class/Server_Socket.hpp"
 #include "./Socket_class/Client_Socket.hpp"
 
+
+/*Add Ons for Terminal UI*/
 const std::vector<std::string> ALGO_NAMES = {
     "euler",
     "hamilton",

@@ -51,9 +51,9 @@ struct SharedState {
     std::vector<pollfd> fds;
 
     // per-client state
-    std::unordered_map<int, std::shared_ptr<GraphT>> client_graphs;
-    std::unordered_map<int, int>                     graph_n;
-    std::unordered_map<int, AlgoParams>              params;
+    std::unordered_map<int, std::shared_ptr<GraphT>> client_graphs;/*Hash map to map client-> graph*/
+    std::unordered_map<int, int>                     graph_n;/*client-> desired amount of vertices*/
+    std::unordered_map<int, AlgoParams>              params;/*client -> Max_Flow Paramters*/
 
     // per-client input buffer (accumulate by '\n')
     std::unordered_map<int, std::string>             inbuf;
@@ -91,7 +91,7 @@ static void process_line(const std::string& raw, int fd,
     std::string line = raw; trim(line);
     if (line.empty()) return;
 
-    std::string cmd = line.substr(0, line.find('|'));
+    std::string cmd = line.substr(0, line.find('|'));//Get the first command
     cmd = tolower_copy(cmd);
 
     // ---------------------- INIT ----------------------
@@ -209,13 +209,13 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S) {
             S.leader_token = true;
         }
 
-        // leader: perform deferred closes
+        // leader: perform deferred closes(removing any disconnected clients)
         {
             std::lock_guard<std::mutex> lk(S.state_mtx);
             for (int fd : S.pending_close) {
                 ::close(fd);
                 auto it = std::find_if(S.fds.begin(), S.fds.end(),
-                    [&](const pollfd& p){ return p.fd == fd; });
+                    [&](const pollfd& p){ return p.fd == fd; });//get a client iterator to remove it
                 if (it != S.fds.end()) S.fds.erase(it);
                 S.client_graphs.erase(fd);
                 S.graph_n.erase(fd);
@@ -229,7 +229,7 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S) {
         // poll
         int nready = poll(S.fds.data(), S.fds.size(), NO_TIMEOUT);
         if (nready < 0) {
-            if (errno == EINTR) {
+            if (errno == EINTR) {//Interrupted Syscall(Mutating errno)
                 std::lock_guard<std::mutex> lk(S.leader_mtx);
                 S.leader_token = false;
                 S.leader_cv.notify_one();
@@ -253,7 +253,7 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S) {
                 if (p.revents & POLLIN) { chosen_fd = p.fd; p.revents = 0; break; }
             }
         }
-
+        //No Job is Available,then set a new leader
         if (chosen_fd == -1) {
             std::lock_guard<std::mutex> lk(S.leader_mtx);
             S.leader_token = false;
@@ -306,19 +306,20 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S) {
         std::string local;
         {
             std::lock_guard<std::mutex> lk(S.state_mtx);
-            local.swap(S.inbuf[chosen_fd]);
+            local.swap(S.inbuf[chosen_fd]); //now local contains the inbuf[client_fd] data
         }
 
-        size_t start = 0;
+        size_t start = 0; // for ever 
         for (;;) {
             size_t pos = local.find('\n', start);
-            if (pos == std::string::npos) {
+            //std::string::nops an indicator for an event "Not found".
+            if (pos == std::string::npos) {//if '\n' was not found
                 // put back remainder (partial line) to per-client buffer
                 std::lock_guard<std::mutex> lk(S.state_mtx);
                 S.inbuf[chosen_fd].append(local.substr(start));
                 break;
             }
-            std::string line = local.substr(start, pos - start);
+            std::string line = local.substr(start, pos - start); // Acumulating the Line successfully
             process_line(line, chosen_fd, server, S);
             start = pos + 1;
         }
@@ -331,11 +332,12 @@ int main() {
     ServerSocketTCP server(S.fds);
     std::cout << "[Server listening on port " << PORT << " TCP]\n";
 
-    const unsigned N = std::max(2u, std::thread::hardware_concurrency());
+    const unsigned N = std::max(2u, std::thread::hardware_concurrency());//get the number of threads
     std::vector<std::thread> pool;
     pool.reserve(N);
     for (unsigned i = 0; i < N; ++i)
-        pool.emplace_back(worker_loop, std::ref(server), std::ref(S));
+    //Filling a queue(in our case a vector) with the threads
+    pool.emplace_back(worker_loop, std::ref(server), std::ref(S));
 
     {
         std::lock_guard<std::mutex> lk(S.leader_mtx);

@@ -23,6 +23,18 @@ using std::string;
 
 static std::vector<pollfd> fds;
 
+/*
+   Running format:
+   1) Random -
+        server:./server 
+        client:./client random <vertices_number> <probability>
+
+    2) Manul -
+        server:./server
+        client:./client manual <vertices_number> <edges: example - (1-2,2-3,3-1)>   
+
+*/
+
 // === Helper: generate random unweighted graph ===
 std::shared_ptr<Graph<int>> generate_random_graph(int vertices, double p) {
     // undirected by default
@@ -102,6 +114,7 @@ int main() {
     }
     freeaddrinfo(res);
 
+    // Add listening socket to poll list
     fds.push_back({ .fd = server_fd, .events = POLLIN, .revents = 0 });
     cout << "[Server listening on Port " << PORT << " TCP]\n";
 
@@ -114,6 +127,7 @@ int main() {
             if (p.revents & POLLIN) {
                 --nready;
                 if (p.fd == server_fd) {
+                    // Accept new connection
                     sockaddr_storage client_addr{};
                     socklen_t client_len = sizeof(client_addr);
                     int client_fd = accept(server_fd, (sockaddr*)&client_addr, &client_len);
@@ -121,6 +135,8 @@ int main() {
                         perror("accept");
                         continue;
                     }
+
+                    // Register and immediately read payload
                     fds.push_back({ .fd = client_fd, .events = POLLIN, .revents = 0 });
                     cout << "New client connected, fd=" << client_fd << endl;
                 } else {
@@ -167,11 +183,11 @@ int main() {
                             continue;
                         }
 
-                        auto graph = std::make_shared<Graph<int>>(vertices);
+                        auto graph = std::make_shared<Graph<int>>(vertices); //set the Graph
                         std::unordered_set<string> edges_seen;
                         bool valid = true;
-
                         string edge_str;
+                        //validating clients Format
                         while (ls >> edge_str) {
                             // Expect u-v
                             size_t dash_pos = edge_str.find('-');

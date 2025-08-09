@@ -6,7 +6,8 @@
 
 namespace Q9 {
 
-// AO_Fanout registers the job with the aggregator and pushes copies into all algo queues.
+/* AO_Fanout registers the job with the aggregator 
+    and pushes copies into all algo queues.*/
 class AO_Fanout : public ActiveObject<Job> {
 public:
     AO_Fanout(BlockingQueue<Job>& in_q,

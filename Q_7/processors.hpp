@@ -11,7 +11,10 @@
 
 
 
-
+/*Added Processing functions for parsing and converting
+Request and response types:
+Request ----->  Response
+Response -----> std::string */
 
 
 
