@@ -17,6 +17,9 @@
 #include <optional>
 #include <cerrno>
 
+
+
+
 namespace GI = Graph_implementation;
 using Vertex = int;
 using GraphT = GI::Graph<Vertex>;
@@ -222,6 +225,9 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S) {
                 S.params.erase(fd);
                 S.inbuf.erase(fd);
                 std::cout << "Client " << fd << " closed.\n";
+                #if GCOV_MODE
+                 std::exit(0);
+                 #endif
             }
             S.pending_close.clear();
         }
@@ -287,7 +293,10 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S) {
         bool peer_closed = false;
         while (true) {
             std::string chunk = recv_nb(chosen_fd);
-            if (chunk.empty()) { peer_closed = true; break; }         // real close
+            if (chunk.empty()) { 
+                peer_closed = true; 
+                break;  // real close
+            }        
             if (chunk == "#NODATA") break;                            // drained
             {
                 std::lock_guard<std::mutex> lk(S.state_mtx);
@@ -323,7 +332,10 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S) {
             process_line(line, chosen_fd, server, S);
             start = pos + 1;
         }
+
     }
+    
+    return;
 }
 
 int main() {

@@ -4,7 +4,7 @@
 CXX = g++
 
 # Coverage/debug toolchain (used for main and LIGHT tests)
-CXXFLAGS_COV = -std=c++17 -Wall -Wextra -I./Graph -g --coverage
+CXXFLAGS_COV = -std=c++17 -Wall -Wextra -I./Graph -g --coverage -pthread -O0
 LDFLAGS_COV  = --coverage
 
 # Fast/optimized toolchain (used for FULL/HARD tests)
@@ -149,11 +149,36 @@ report: test
 	@$(GENHTML) coverage.filtered.info --output-directory $(REPORT_DIR) >/dev/null 2>&1 || true
 	@echo "Open $(REPORT_DIR)/index.html"
 
+
+#==========================
+#Helgrind
+#	command: "make hellgrind"
+#==========================
+
+helgrind:
+	valgrind --tool=helgrind --history-level=full --track-lockorders=yes  --fair-sched=yes ./main_graph 
+
+
+#==========================
+#CallGrind
+#	command: "make callgrind"
+#==========================
+
+
+callgrind:
+	valgrind --tool=callgrind \
+         --callgrind-out-file=callgrind.out \
+         --dump-instr=yes \
+         --collect-jumps=yes \
+		 ./main_graph
+
+
+
 # =========================
 # Clean
 # =========================
 clean:
 	rm -f $(TARGET) $(TEST_LIGHT) $(TEST_FULL) \
-	      $(MAIN_OBJ) $(TEST_OBJ) Graph/testingG.light.o $(LIB_OBJS) \
-	      *.gcno *.gcda *.gcov coverage.info coverage.filtered.info
+	      $(MAIN_OBJ) $(TEST_OBJ) Graph/testingG.light.o Graph/testingG.light.gcda Graph/testingG.light.gcno $(LIB_OBJS) \
+	      *.gcno *.gcda *.gcov *.out coverage.info coverage.filtered.info
 	rm -rf $(REPORT_DIR)
