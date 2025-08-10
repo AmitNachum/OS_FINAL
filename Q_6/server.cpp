@@ -15,6 +15,7 @@
 #include <netdb.h>
 #include <poll.h>
 
+
 using namespace Graph_implementation;
 using std::cout;
 using std::cerr;
@@ -227,6 +228,10 @@ int main() {
         // Remove closed sockets
         fds.erase(std::remove_if(fds.begin(), fds.end(),
                  [](const pollfd &p){ return p.fd == -1; }), fds.end());
+
+       #if GCOV_MODE
+            break;
+       #endif               
     }
 
     for (auto &p : fds) if (p.fd != -1) close(p.fd);

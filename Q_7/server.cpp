@@ -15,6 +15,9 @@
 #include <cctype>
 #include <string>
 
+#ifndef GCOV_MODE
+#define GCOV_MODE 0
+#endif
 using Vertex = int;
 
 // ---- helpers: trim / lowercase ------------------------------------------------
@@ -90,6 +93,9 @@ int main() {
                     fds.erase(fds.begin() + i);
                     --i;
                     std::cout << "Client " << fd << " disconnected.\n";
+                            #if GCOV_MODE 
+                            goto end;
+                            #endif 
                     continue;
                 }
 
@@ -215,8 +221,9 @@ int main() {
                 --i;
             }
         }
+ 
     }
-
+    end:
     ::close(listen_fd);
     return 0;
 }
