@@ -22,10 +22,13 @@
 #include <optional>
 #include <cerrno>
 #include <atomic>
-
+#ifndef GCOV_MODE
+#define GCOV_MODE 0
+#endif
 namespace GI = Graph_implementation;
 using Vertex = int;
 using GraphT = GI::Graph<Vertex>;
+
 
 // ------------------------- helpers -------------------------
 static inline void rtrim(std::string& s) {
@@ -222,6 +225,9 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S,
                 S.params.erase(fd);
                 S.inbuf.erase(fd);
                 std::cout << "Client " << fd << " closed.\n";
+                #if GCOV_MODE
+                std::exit(0);
+                #endif
             }
             S.pending_close.clear();
         }
@@ -259,7 +265,7 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S,
             continue;
         }
 
-        if (chosen_fd == listen_fd) {
+        if (chosen_fd == listen_fd) {//Incoming New connection
             int cfd = server.accept_connections();
             if (cfd >= 0) {
                 server.make_non_blocking(cfd);
@@ -336,6 +342,7 @@ int main() {
     pipeline.set_ham_func(Q9::run_hamilton);
     pipeline.set_maxflow_func(Q9::run_maxflow);
     pipeline.start();
+    std::cout <<"Starting pipelining...." << std::endl;
     // ---------------------------------------
 
     const unsigned N = std::max(2u, std::thread::hardware_concurrency());

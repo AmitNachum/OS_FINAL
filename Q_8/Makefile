@@ -52,6 +52,11 @@ clean_coverage:
 	@find ../Q_7 -type f \( -name '*.gcno' -o -name '*.gcda' -o -name '*.gcov' \) -delete
 	@rm -f server_cov client_cov .srvpid
 	@echo "[COVER] cleaned"
+	@rm -f *.gcno *.gcda *.gcov
+	@rm -f ../Q_7/Socket_class/*.gcno ../Q_7/Socket_class/*.gcda ../Q_7/Socket_class/*.gcov
+	@rm -rf .cov ./home ./amit ./Desktop ./C++_Amit ./OS_Final_Versions ./OS_final ./Q_7 ./Q_8
+	@echo "[COVER] cleaned"
+
 # -------------------- SERVER --------------------
 cover_server:
     # 1. Clean up old coverage files
@@ -69,12 +74,23 @@ cover_server:
     # 3. Link executable
 	g++ --coverage server.o ../Q_7/Socket_class/Server_Socket.o -pthread -o server_cov
     
-    # 4. Run server
-	./server_cov
-    
-    # 5. Generate gcov reports (FIXED)
-	gcov -b -c -r server.cpp -o .
-	gcov -b -c -r ../Q_7/Socket_class/Server_Socket.cpp -o ../Q_7/Socket_class/
+# 4) Run server → write .gcda under ./.cov (no clashes)
+	@rm -rf .cov
+	@mkdir -p .cov
+	@GCOV_PREFIX="$(CURDIR)/.cov" GCOV_PREFIX_STRIP=6 ./server_cov
+
+# 5) Move/overlay the generated .gcda back next to their .gcno
+	@cd .cov && find . -name '*.gcda' -exec cp --parents -f {} .. \;
+	@echo "Have files:" && ls -l server.gcno server.gcda || true
+
+
+# 6) Now gcov can see matching pairs; run it only for the files you care about
+	@gcov -b -c -r -o . server.cpp
+	@gcov -b -c -r -o ../Q_7/Socket_class ../Q_7/Socket_class/Server_Socket.cpp
+
+
+
+
 # -------------------- CLIENT --------------------
 cover_client: clean_coverage
 	@echo "[COVER] compile server objects WITH coverage (NO GCOV_MODE here)"
@@ -119,6 +135,7 @@ cover_client: clean_coverage
 clean: clean_coverage
 	@rm -f server client server_cov client_cov *.o callgrind.*.out
 	@echo "Clean complete."
+	
 
 
 clean:
@@ -131,3 +148,5 @@ clean:
 	rm -f $(wildcard ../Q_7/Socket_class/*.gcov)
 	rm -f server_cov client_cov
 	rm -f callgrind.callgrind_server.out
+	rm -rf .cov
+
