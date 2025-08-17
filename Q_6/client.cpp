@@ -82,6 +82,7 @@ int main(int argc, char** argv) {
     while((n = recv(sockfd, buf, sizeof(buf)-1, 0)) > 0){
         buf[n] = '\0';
         cout << buf;
+        break; // Assuming server sends a single response
     }
     if(n < 0) perror("recv");
 

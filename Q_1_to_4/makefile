@@ -51,7 +51,7 @@ VPATH = .:$(GRAPH_DIR)
 # =========================
 # Default target
 # =========================
-all: Main
+all: $(TARGET)
 
 # =========================
 # Build rules
@@ -81,13 +81,6 @@ $(TEST_FULL): $(TEST_OBJ) $(LIB_OBJS)
 	$(CXX) $(CXXFLAGS_COV) $(CXXEXTRA) -c $< -o $@
 
 # =========================
-# Run only main
-# =========================
-Main: $(TARGET)
-	@echo "Running main program..."
-	@./$(TARGET)
-
-# =========================
 # 1) make test  -> LIGHT (Valgrind + Coverage)   [NO heavy/perf]
 # =========================
 # Skip Valgrind via: make test TEST_NO_VALGRIND=1
@@ -99,7 +92,7 @@ else
 	@valgrind --leak-check=full --error-exitcode=1 ./$(TEST_LIGHT)
 endif
 	@echo "Running main (adds to coverage)..."
-	@./$(TARGET)
+	@./$(TARGET) -v 3 -e 3 -r 42
 	@echo "Generating coverage for YOUR sources only..."
 	@find . -type f -name '*.gcov' -delete
 	@gcov -b -c $(GCOV_SRCS) >/dev/null 2>&1 || true
@@ -129,7 +122,7 @@ test-hard: $(TEST_FULL)
 # Extra: coverage on main only (optional)
 # =========================
 coverage: $(TARGET)
-	@./$(TARGET)
+	@./$(TARGET) -v 3 -e 3 -r 42
 	@find . -type f -name '*.gcov' -delete
 	@gcov -b -c $(MAIN_SRC) $(LIB_SRCS) >/dev/null 2>&1 || true
 	@for f in *.gcov; do \
@@ -156,7 +149,7 @@ report: test
 #==========================
 
 helgrind:
-	valgrind --tool=helgrind --history-level=full --track-lockorders=yes  --fair-sched=yes ./main_graph 
+	valgrind --tool=helgrind --history-level=full --track-lockorders=yes  --fair-sched=yes ./main_graph -v 3 -e 3 -r 42
 
 
 #==========================
@@ -170,7 +163,7 @@ callgrind:
          --callgrind-out-file=callgrind.out \
          --dump-instr=yes \
          --collect-jumps=yes \
-		 ./main_graph
+		 ./main_graph -v 3 -e 3 -r 42
 
 
 

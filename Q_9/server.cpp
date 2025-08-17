@@ -22,26 +22,17 @@
 #include <optional>
 #include <cerrno>
 #include <atomic>
-#include <csignal> // NEW: for signal handling
-
-#ifndef GCOV_MODE
-#define GCOV_MODE 0
-#endif
+#include <csignal> // for signal handling
 
 namespace GI = Graph_implementation;
 using Vertex = int;
 using GraphT = GI::Graph<Vertex>;
 
 // ------------------------- GCOV handler -------------------------
-// NEW: Declaration of the GCOV flush function
-extern "C" void __gcov_flush();
 
 // NEW: Signal handler function
 static void handle_sigint(int) {
     std::cout << "\nServer received SIGINT. Shutting down gracefully and flushing gcov data..." << std::endl;
-    if (GCOV_MODE) {
-        __gcov_flush();
-    }
     // We exit here to ensure the program terminates after flushing
     exit(0);
 }
@@ -341,7 +332,7 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S,
 int main() {
     SharedState S;
 
-    // NEW: Register the signal handler for graceful shutdown
+    // Register the signal handler for graceful shutdown
     signal(SIGINT, handle_sigint);
     
     ServerSocketTCP server(S.fds);

@@ -1,88 +1,98 @@
-CXX = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -I../Q_1_to_4/Graph -pthread -O0 --coverage
+# ---- Stage 6/7/8 Makefile with Build + Coverage + Tools ----
 
-# Pull port number from network_interface.hpp
-PORT_NUM := $(shell sed -n 's/#define PORT *"\(.*\)"/\1/p' network_interface.hpp)
+CXX := g++
+CXXSTD := -std=c++20
+CXXWARN := -Wall -Wextra -Wpedantic
+CXXMT := -pthread
+CXXFLAGS := $(CXXSTD) $(CXXWARN) $(CXXMT)
 
-TARGETS = server client
+INCLUDES := -I. -I../Q_1_to_4/Graph
 
-# Default target: build both server and client
-all: $(TARGETS)
+# Sources
+SERVER_SRCS := server.cpp
+CLIENT_SRCS := client.cpp
 
-server: server.o
-	$(CXX) $(CXXFLAGS) -o $@ $^
+SERVER_EXE := server
+CLIENT_EXE := client
 
-client: client.o
-	$(CXX) $(CXXFLAGS) -o $@ $^
+GCOV_BUILD_DIR := ./coverage_build
 
-# Pattern rule for building object files
-%.o: %.cpp network_interface.hpp ../Q_1_to_4/Graph/Graph.hpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+VALGRIND_FLAGS := --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose
 
+# ---------- Normal Build ----------
+
+.PHONY: all
+all: $(SERVER_EXE) $(CLIENT_EXE)
+
+$(SERVER_EXE): $(SERVER_SRCS)
+	@echo "Compiling server"
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
+
+$(CLIENT_EXE): $(CLIENT_SRCS)
+	@echo "Compiling client"
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
+
+# ---------- Coverage ----------
+
+.PHONY: cover_build cover_server cover_client clean_coverage gcov_report
+
+COVER_CXXFLAGS := -O0 -g --coverage -fprofile-arcs -ftest-coverage $(CXXSTD) $(CXXWARN) $(CXXMT) $(INCLUDES)
+COVER_LDFLAGS := --coverage $(CXXMT)
+
+clean_coverage:
+	@echo "[COVER] Cleaning old coverage files"
+	@rm -rf *.gcno *.gcda *.gcov $(GCOV_BUILD_DIR)
+	@mkdir -p $(GCOV_BUILD_DIR)
+	@echo "[COVER] Done cleaning"
+
+cover_build: clean_coverage
+	@echo "[COVER] Compiling server and client for coverage"
+	$(CXX) $(COVER_CXXFLAGS) -c $(SERVER_SRCS) -o $(GCOV_BUILD_DIR)/server.o
+	$(CXX) $(COVER_CXXFLAGS) -c $(CLIENT_SRCS) -o $(GCOV_BUILD_DIR)/client.o
+	
+	$(CXX) $(COVER_LDFLAGS) $(GCOV_BUILD_DIR)/server.o -o $(GCOV_BUILD_DIR)/server_cov
+	$(CXX) $(COVER_LDFLAGS) $(GCOV_BUILD_DIR)/client.o -o $(GCOV_BUILD_DIR)/client_cov
+
+cover_server:
+	@echo "[COVER] Running server coverage build"
+	@./$(GCOV_BUILD_DIR)/server_cov
+
+cover_client:
+	@echo "[COVER] Running client coverage build"
+	@./$(GCOV_BUILD_DIR)/client_cov $(ARGS)
+
+gcov_report:
+	@echo "[COVER] Collecting coverage reports"
+	@gcov -b -c -r --object-directory=$(GCOV_BUILD_DIR) $(SERVER_SRCS)
+	@gcov -b -c -r --object-directory=$(GCOV_BUILD_DIR) $(CLIENT_SRCS)
+	@echo "== GCOV Reports Printed =="
+
+# ---------- Valgrind / Helgrind / Callgrind ----------
 
 .PHONY: valgrind_server valgrind_client helgrind_server helgrind_client callgrind_server callgrind_client
 
-# ---------- Memcheck ----------
-valgrind_server:
-	@valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes \
-		./server $(filter-out $@,$(MAKECMDGOALS))
+valgrind_server: $(SERVER_EXE)
+	@valgrind $(VALGRIND_FLAGS) ./$(SERVER_EXE)
 
-valgrind_client:
-	@valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes \
-		./client $(filter-out $@,$(MAKECMDGOALS))
+valgrind_client: $(CLIENT_EXE)
+	@echo "Running client with arguments: $(ARGS)"
+	@valgrind $(VALGRIND_FLAGS) ./$(CLIENT_EXE) $(ARGS)
 
-# ---------- Helgrind ----------
-helgrind_server:
-	@valgrind --tool=helgrind --history-level=full --track-lockorders=yes --fair-sched=yes \
-		./server $(filter-out $@,$(MAKECMDGOALS))
+helgrind_server: $(SERVER_EXE)
+	@valgrind --tool=helgrind --history-level=full --track-lockorders=yes --fair-sched=yes ./$(SERVER_EXE)
 
-helgrind_client:
-	@valgrind --tool=helgrind --history-level=full --track-lockorders=yes --fair-sched=yes \
-		./client $(filter-out $@,$(MAKECMDGOALS))
+helgrind_client: $(CLIENT_EXE)
+	@valgrind --tool=helgrind --history-level=full --track-lockorders=yes --fair-sched=yes ./$(CLIENT_EXE) $(ARGS)
 
-# ---------- Callgrind ----------
-callgrind_server:
-	@valgrind --tool=callgrind --callgrind-out-file=callgrind.$@.out --dump-instr=yes --collect-jumps=yes \
-		./server $(filter-out $@,$(MAKECMDGOALS))
+callgrind_server: $(SERVER_EXE)
+	@valgrind --tool=callgrind --callgrind-out-file=callgrind.$@.out --dump-instr=yes --collect-jumps=yes ./$(SERVER_EXE)
 
-callgrind_client:
-	@valgrind --tool=callgrind --callgrind-out-file=callgrind.$@.out --dump-instr=yes --collect-jumps=yes \
-		./client $(filter-out $@,$(MAKECMDGOALS))
+callgrind_client: $(CLIENT_EXE)
+	@valgrind --tool=callgrind --callgrind-out-file=callgrind.$@.out --dump-instr=yes --collect-jumps=yes ./$(CLIENT_EXE) $(ARGS)
 
-# Swallow extra words after the first target so make doesn't treat them as targets
-%:
-	@:
-# --- Build the preload flusher once ---
-gcovflush.so: gcov_flush.c
-	$(CC) -fPIC -shared -o $@ $<
+# ---------- Clean ----------
 
-.PHONY: cover_client cover_server clean_coverage
-
-# Client coverage run (supports: make cover_client random 4 0.5)
-cover_client: client gcovflush.so
-	@LD_PRELOAD=./gcovflush.so ./client $(filter-out $@,$(MAKECMDGOALS))
-	@echo "== GCOV (client) =="
-	@gcov -b -c -o . $(shell find . -maxdepth 2 -name '*.cpp') | grep -E 'File|Lines executed|Branch' || true
-
-# Server coverage run (supports: make cover_server manual 8 0.2)
-cover_server: CXXFLAGS += -DGCOV_MODE=1
-cover_server: server gcovflush.so
-	@LD_PRELOAD=./gcovflush.so ./server $(filter-out $@,$(MAKECMDGOALS)) || true
-	@echo "== GCOV (server) =="
-	@gcov -b -c -o . $(shell find . -maxdepth 2 -name '*.cpp') | grep -E 'File|Lines executed|Branch' || true
-
-# Swallow extra words so make doesn't treat them as targets
-%:
-	@:
-
-# Cleanup
-clean_coverage:
-	@rm -f *.gcda *.gcno *.gcov coverage.info
-
-
-.PHONY: all clean
-
-clean:
-	-@echo "Killing processes listening on TCP port $(PORT_NUM)..."
-	-@lsof -ti tcp:$(PORT_NUM) | xargs -r kill -9
-	 rm -f *.o $(TARGETS) *.gcno *.gcda *.gcov gcov gcovflush.so
+.PHONY: clean
+clean: clean_coverage
+	@echo "Cleaning build artifacts..."
+	@rm -f $(SERVER_EXE) $(CLIENT_EXE) *.o *.gcno *.gcda *.gcov server_cov client_cov

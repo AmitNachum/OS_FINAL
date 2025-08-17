@@ -76,7 +76,6 @@ class Graph{
     Graph& operator=(Graph &&other) = default;
 
     bool is_directed() const { return directed_; }
-    void set_directed(bool d) { directed_ = d; }
 
     void add_vertex(const T &vertex){
         // Ensure the vertex key exists and initialize adjacency if new
@@ -94,7 +93,7 @@ class Graph{
     T& get_first(){ return start_vertex; }
 
     // Adds an edge using the graph's directedness flag.
-    void add_edge(const T &u, const T &v, double w, bool /*ignored*/ = false){
+    void add_edge(const T &u, const T &v, double w){
         // NOTE: external 'directed' param is ignored; we use directed_ consistently.
 
         // Ensure both endpoints exist to keep degrees/queries consistent
@@ -127,36 +126,29 @@ class Graph{
         }
     }
 
-    void remove_edge(const T &u, const T &v, double w, bool /*ignored*/ = false){
-        // Robust removal: try exact (v,w). If not present, remove by target v anyway.
+    void remove_edge(const T &u, const T &v){
+        // Remove an edge u->v (or v->u for undirected) if it exists.
+        if (graph.empty()) return; // no edges to remove
         auto it_u = graph.find(u);
         if (it_u == graph.end()) return;
 
-        auto& set_u = it_u->second;
+        auto& nbrs_u = it_u->second;
 
-        // First attempt: exact erase by pair (v,w)
-        size_t erased = set_u.erase({v,w});
-
-        if (erased == 0) {
-            // Fallback: find any edge to v (weight-agnostic) and erase it
-            auto it = std::find_if(set_u.begin(), set_u.end(),
-                                   [&](const auto& pr){ return pr.first == v; });
-            if (it != set_u.end()) set_u.erase(it);
-        }
+        // Fallback: find any edge to v (weight-agnostic) and erase it
+        auto it = std::find_if(nbrs_u.begin(), nbrs_u.end(),
+                                [&](const auto& pr){ return pr.first == v; });
+        if (it != nbrs_u.end()) nbrs_u.erase(it);
 
         if(!directed_){
+            // For undirected graphs, also remove the reverse edge
             auto it_v = graph.find(v);
-            if (it_v == graph.end()) return;
-            auto& set_v = it_v->second;
-            erased = set_v.erase({u,w});
-            if (erased == 0) {
-                auto it = std::find_if(set_v.begin(), set_v.end(),
-                                       [&](const auto& pr){ return pr.first == u; });
-                if (it != set_v.end()) set_v.erase(it);
+            if (it_v != graph.end()) {
+                auto& nbrs_v = it_v->second;
+                auto it_rev = std::find_if(nbrs_v.begin(), nbrs_v.end(),
+                                           [&](const auto& pr){ return pr.first == u; });
+                if (it_rev != nbrs_v.end()) nbrs_v.erase(it_rev);
             }
         }
-
-        // Note: we intentionally do not remove isolated vertices here to keep references stable.
     }
 
     // ======================= Common helpers =======================
@@ -167,16 +159,17 @@ class Graph{
     }
 
     size_t out_degree(const T& v) const {
-        auto it = graph.find(v);
-        return (it == graph.end()) ? 0 : it->second.size();
+        return degree(v); // For directed graphs, out-degree is the same as degree
     }
 
     size_t in_degree(const T& v) const {
         // O(V+E) scan. Consider caching if called frequently.
         size_t deg = 0;
         for (const auto& [u, nbrs] : graph) {
-            for (const auto& pr : nbrs) {
-                if (pr.first == v) { ++deg; break; }
+            if (u != v){ 
+                for (const auto& pr : nbrs) {
+                    if (pr.first == v) { ++deg; break; }
+                }
             }
         }
         return deg;
@@ -190,34 +183,25 @@ class Graph{
         return true;
     }
 
-    // Undirected connectivity
-    bool is_connected_undirected() const{
-        if (graph.empty()) return true;
-        std::stack<T> st;
-        std::unordered_set<T> vis;
-        T start = graph.begin()->first;
-        st.push(start);
-        while(!st.empty()){
-            T u = st.top(); st.pop();
-            if (!vis.insert(u).second) continue;
-            for(const auto&[w,_] : graph.at(u)) if(!vis.count(w)) st.push(w);
-        }
-        return vis.size() == graph.size();
-    }
-
     // Weak connectivity for directed graphs: ignore directions over non-zero-degree subgraph
+    // Returns true if the subgraph induced by all vertices with at least one edge (in or out)
+    // is connected when ignoring edge directions.
+    // Used for checking weak connectivity in directed graphs (e.g., for Eulerian circuit).
     bool weakly_connected_nonzero() const {
+        // Build undirected adjacency list and collect all vertices with nonzero degree
         std::unordered_map<T, std::vector<T>> und;
         std::unordered_set<T> nonzero;
         for (const auto& [u, nbrs] : graph) {
-            if (!nbrs.empty()) nonzero.insert(u);
+            if (!nbrs.empty()) nonzero.insert(u); // vertex has outgoing edges
             for (const auto& [v, _] : nbrs) {
-                und[u].push_back(v);
-                und[v].push_back(u);
-                nonzero.insert(v);
+                und[u].push_back(v);   // add edge u-v
+                und[v].push_back(u);   // add edge v-u (undirected)
+                nonzero.insert(v);     // vertex has incoming edges
             }
         }
-        if (nonzero.empty()) return true; // trivial
+        if (nonzero.empty()) return true; // trivial: no edges, considered connected
+
+        // DFS/BFS to check connectivity over nonzero-degree vertices
         std::stack<T> st;
         std::unordered_set<T> vis;
         T start = *nonzero.begin();
@@ -228,6 +212,7 @@ class Graph{
                 for (auto& w : und[u]) if (!vis.count(w)) st.push(w);
             }
         }
+        // If any nonzero-degree vertex is not visited, not connected
         for (auto& v : nonzero) if (!vis.count(v)) return false;
         return true;
     }
@@ -244,7 +229,7 @@ class Graph{
 
    private:
     bool is_eulerian_undirected_impl() const {
-        return all_even_degree() && is_connected_undirected();
+        return all_even_degree() && weakly_connected_nonzero();
     }
 
     bool is_eulerian_directed_impl() const {
@@ -256,17 +241,37 @@ class Graph{
         return true;
     }
 
+    /**
+     * @brief Finds an Eulerian circuit in an undirected graph using Hierholzer's algorithm.
+     *
+     * This function checks if the graph is empty or not Eulerian, returning an empty vector in those cases.
+     * It constructs adjacency lists and uses a multiset to emulate edge removals for undirected graphs.
+     * The algorithm starts from a vertex with edges and traverses the graph, removing edges as they are used,
+     * and builds the Eulerian circuit in reverse order.
+     *
+     * @return std::vector<T> The sequence of vertices representing the Eulerian circuit.
+     *         Returns an empty vector if the graph is empty or not Eulerian.
+     *
+     * @note The graph must be undirected and Eulerian (all vertices have even degree and the graph is connected).
+     * @note The function assumes the existence of the member function is_eulerian_undirected_impl().
+     */
     std::vector<T> euler_undirected_impl() const {
+        if (graph.empty()) return {}; // empty graph has no circuit
         if (!is_eulerian_undirected_impl()) return {};
-        // Hierholzer on multiset emulation using copies
+
+        // Build adjacency list for each vertex
         std::unordered_map<T, std::vector<T>> adj;
         for (const auto& [u, s] : graph) {
             for (const auto& [v,_w]: s) adj[u].push_back(v);
         }
-        // remove back-edges as we go using a multiset-like approach
-        std::unordered_map<T, std::multiset<T>> ms;
-        for (auto& [u, vs] : adj) for (auto v: vs) ms[u].insert(v);
 
+        // Use multiset to allow removal of edges as we traverse them
+        std::unordered_map<T, std::multiset<T>> ms;
+        for (auto& [u, vs] : adj)
+            for (auto v: vs)
+                ms[u].insert(v);
+
+        // Helper to erase both directions of an undirected edge
         auto erase_und = [&](const T& a, const T& b){
             auto it = ms[a].find(b);
             if (it!=ms[a].end()) ms[a].erase(it);
@@ -274,18 +279,25 @@ class Graph{
             if (it!=ms[b].end()) ms[b].erase(it);
         };
 
+        // Find a starting vertex with at least one edge
         T start = graph.begin()->first;
-        for (const auto& [u,s] : graph) if (!s.empty()) { start=u; break; }
+        for (const auto& [u,s] : graph)
+            if (!s.empty()) { start=u; break; }
 
-        std::stack<T> st; std::vector<T> circ;
+        std::stack<T> st;
+        std::vector<T> circ;
         st.push(start);
+
+        // Hierholzer's algorithm main loop
         while(!st.empty()){
             T u = st.top();
             if (!ms[u].empty()){
+                // Traverse an unused edge
                 T v = *ms[u].begin();
                 erase_und(u,v);
                 st.push(v);
             } else {
+                // No more edges from u, add to circuit
                 circ.push_back(u);
                 st.pop();
             }
@@ -295,27 +307,40 @@ class Graph{
     }
 
     std::vector<T> euler_directed_impl() const {
+        if (graph.empty()) return {}; // empty graph has no circuit
         if (!is_eulerian_directed_impl()) return {};
-        std::unordered_map<T, std::vector<T>> adj; adj.reserve(graph.size());
+
+        // Build adjacency list for each vertex (directed)
+        // Each vertex maps to a vector of its outgoing neighbors
+        std::unordered_map<T, std::vector<T>> adj; 
+        adj.reserve(graph.size());
         for (const auto& [u, nbrs] : graph) {
             auto& vec = adj[u];
             vec.reserve(nbrs.size());
             for (const auto& [v, _w] : nbrs) vec.push_back(v);
         }
+
+        // Map to track the current index of the next unused outgoing edge for each vertex
         std::unordered_map<T, size_t> idx;
         std::stack<T> st;
         std::vector<T> circuit;
 
+        // Find a starting vertex with at least one outgoing edge
         T start = graph.empty() ? T{} : graph.begin()->first;
         for (const auto& [u, nbrs] : graph) if (!nbrs.empty()) { start = u; break; }
 
         st.push(start);
+        // Hierholzer's algorithm main loop
         while (!st.empty()) {
             T u = st.top();
             auto& vec = adj[u];
             size_t& i = idx[u];
-            if (i < vec.size()) st.push(vec[i++]);
-            else { circuit.push_back(u); st.pop(); }
+            if (i < vec.size())
+                st.push(vec[i++]); // Traverse next unused outgoing edge
+            else {
+                circuit.push_back(u); // No more edges from u, add to circuit
+                st.pop();
+            }
         }
         std::reverse(circuit.begin(), circuit.end());
         return circuit;
