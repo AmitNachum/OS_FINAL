@@ -22,13 +22,30 @@
 #include <optional>
 #include <cerrno>
 #include <atomic>
+#include <csignal> // NEW: for signal handling
+
 #ifndef GCOV_MODE
 #define GCOV_MODE 0
 #endif
+
 namespace GI = Graph_implementation;
 using Vertex = int;
 using GraphT = GI::Graph<Vertex>;
 
+// ------------------------- GCOV handler -------------------------
+// NEW: Declaration of the GCOV flush function
+extern "C" void __gcov_flush();
+
+// NEW: Signal handler function
+static void handle_sigint(int) {
+    std::cout << "\nServer received SIGINT. Shutting down gracefully and flushing gcov data..." << std::endl;
+    if (GCOV_MODE) {
+        __gcov_flush();
+    }
+    // We exit here to ensure the program terminates after flushing
+    exit(0);
+}
+// ----------------------------------------------------------------
 
 // ------------------------- helpers -------------------------
 static inline void rtrim(std::string& s) {
@@ -59,17 +76,17 @@ struct SharedState {
     std::vector<pollfd> fds;
 
     std::unordered_map<int, std::shared_ptr<GraphT>> client_graphs;
-    std::unordered_map<int, int>                     graph_n;
-    std::unordered_map<int, AlgoParams>              params;
-    std::unordered_map<int, std::string>             inbuf;
+    std::unordered_map<int, int>                      graph_n;
+    std::unordered_map<int, AlgoParams>               params;
+    std::unordered_map<int, std::string>              inbuf;
 
     std::vector<int> pending_close;
 
     std::mutex state_mtx;
     std::mutex leader_mtx;
     std::condition_variable leader_cv;
-    bool leader_token   = false;
-    bool shutting_down  = false;
+    bool leader_token  = false;
+    bool shutting_down = false;
 };
 
 static inline std::string recv_nb(int fd) {
@@ -225,9 +242,6 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S,
                 S.params.erase(fd);
                 S.inbuf.erase(fd);
                 std::cout << "Client " << fd << " closed.\n";
-                #if GCOV_MODE
-                std::exit(0);
-                #endif
             }
             S.pending_close.clear();
         }
@@ -327,6 +341,9 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S,
 int main() {
     SharedState S;
 
+    // NEW: Register the signal handler for graceful shutdown
+    signal(SIGINT, handle_sigint);
+    
     ServerSocketTCP server(S.fds);
     std::cout << "[Server listening on port " << PORT << " TCP]\n";
 
@@ -350,7 +367,7 @@ int main() {
     pool.reserve(N);
     for (unsigned i = 0; i < N; ++i)
         pool.emplace_back(worker_loop, std::ref(server), std::ref(S),
-                          std::ref(pipeline), std::ref(job_counter));
+                             std::ref(pipeline), std::ref(job_counter));
 
     {
         std::lock_guard<std::mutex> lk(S.leader_mtx);

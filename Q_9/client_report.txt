@@ -1,0 +1,15 @@
+File 'client.cpp'
+Lines executed:72.73% of 88
+Branches executed:70.16% of 248
+Taken at least once:36.69% of 248
+Calls executed:50.42% of 236
+Creating 'client.cpp.gcov'
+
+File 'Socket_class/Client_Socket.cpp'
+Lines executed:60.00% of 55
+Branches executed:57.14% of 42
+Taken at least once:30.95% of 42
+Calls executed:42.86% of 35
+Creating 'Client_Socket.cpp.gcov'
+
+Lines executed:67.83% of 143

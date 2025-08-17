@@ -1,0 +1,150 @@
+File '../Q_1_to_4/Graph/Graph.hpp'
+Lines executed:38.82% of 389
+Branches executed:38.04% of 694
+Taken at least once:24.50% of 694
+Calls executed:32.15% of 790
+Creating 'Graph.hpp.gcov'
+
+File '../Q_7/Strategy/EulerAlgo.hpp'
+Lines executed:62.07% of 29
+Branches executed:37.50% of 32
+Taken at least once:25.00% of 32
+Calls executed:50.00% of 36
+Creating 'EulerAlgo.hpp.gcov'
+
+File '../Q_7/Strategy/MST_Algo.hpp'
+Lines executed:90.00% of 20
+Branches executed:87.50% of 32
+Taken at least once:46.88% of 32
+Calls executed:85.19% of 27
+Creating 'MST_Algo.hpp.gcov'
+
+File '../Q_7/Strategy/HamiltonAlgo.hpp'
+Lines executed:85.71% of 14
+Branches executed:83.33% of 24
+Taken at least once:45.83% of 24
+Calls executed:80.95% of 21
+Creating 'HamiltonAlgo.hpp.gcov'
+
+File '../Q_7/Strategy/SCC_Algo.hpp'
+Lines executed:100.00% of 6
+Branches executed:100.00% of 8
+Taken at least once:50.00% of 8
+Calls executed:75.00% of 8
+Creating 'SCC_Algo.hpp.gcov'
+
+File '../Q_7/Strategy/Max_Flow.hpp'
+Lines executed:87.50% of 8
+Branches executed:75.00% of 8
+Taken at least once:37.50% of 8
+Calls executed:85.71% of 7
+Creating 'Max_Flow.hpp.gcov'
+
+File 'server.cpp'
+Lines executed:88.19% of 237
+Branches executed:91.37% of 394
+Taken at least once:48.98% of 394
+Calls executed:77.10% of 345
+Creating 'server.cpp.gcov'
+
+File '../Q_7/Strategy/AlgoIO.hpp'
+Lines executed:80.00% of 5
+No branches
+Calls executed:50.00% of 4
+Creating 'AlgoIO.hpp.gcov'
+
+File '../Q_7/Factory/Factory_Algorithms.hpp'
+Lines executed:88.24% of 17
+Branches executed:90.91% of 66
+Taken at least once:53.03% of 66
+Calls executed:83.33% of 36
+Creating 'Factory_Algorithms.hpp.gcov'
+
+File 'pipeline/Job.hpp'
+No executable lines
+No branches
+No calls
+Removing 'Job.hpp.gcov'
+
+File 'pipeline/AlgoBinders.hpp'
+Lines executed:72.22% of 54
+Branches executed:60.78% of 102
+Taken at least once:30.39% of 102
+Calls executed:53.27% of 107
+Creating 'AlgoBinders.hpp.gcov'
+
+File 'pipeline/Result.hpp'
+No executable lines
+No branches
+No calls
+Removing 'Result.hpp.gcov'
+
+File 'pipeline/Pipeline.hpp'
+Lines executed:100.00% of 4
+No branches
+Calls executed:100.00% of 8
+Creating 'Pipeline.hpp.gcov'
+
+File 'Socket_class/Server_Socket.cpp'
+Lines executed:53.01% of 83
+Branches executed:40.00% of 80
+Taken at least once:21.25% of 80
+Calls executed:25.00% of 68
+Creating 'Server_Socket.cpp.gcov'
+
+File 'pipeline/AO_Aggregator.hpp'
+Lines executed:82.61% of 69
+Branches executed:73.51% of 151
+Taken at least once:39.74% of 151
+Calls executed:64.13% of 92
+Creating 'AO_Aggregator.hpp.gcov'
+
+File 'pipeline/BlockingQueue.hpp'
+Lines executed:78.95% of 114
+Branches executed:93.33% of 90
+Taken at least once:50.00% of 90
+Calls executed:72.82% of 103
+Creating 'BlockingQueue.hpp.gcov'
+
+File 'pipeline/Response.hpp'
+No executable lines
+No branches
+No calls
+Removing 'Response.hpp.gcov'
+
+File 'pipeline/ActiveObject.hpp'
+Lines executed:60.26% of 78
+Branches executed:77.78% of 54
+Taken at least once:38.89% of 54
+Calls executed:60.87% of 69
+Creating 'ActiveObject.hpp.gcov'
+
+File 'pipeline/AO_Responder.hpp'
+Lines executed:100.00% of 5
+Branches executed:100.00% of 4
+Taken at least once:50.00% of 4
+Calls executed:100.00% of 5
+Creating 'AO_Responder.hpp.gcov'
+
+File 'pipeline/AO_Algo.hpp'
+Lines executed:100.00% of 7
+Branches executed:100.00% of 6
+Taken at least once:50.00% of 6
+Calls executed:88.89% of 9
+Creating 'AO_Algo.hpp.gcov'
+
+File 'pipeline/AO_Fanout.hpp'
+Lines executed:100.00% of 15
+Branches executed:100.00% of 22
+Taken at least once:50.00% of 22
+Calls executed:85.00% of 20
+Creating 'AO_Fanout.hpp.gcov'
+
+File 'pipeline/Pipeline.cpp'
+Lines executed:63.04% of 46
+Branches executed:68.97% of 58
+Taken at least once:34.48% of 58
+Calls executed:46.32% of 136
+Creating 'Pipeline.cpp.gcov'
+
+Lines executed:64.75% of 1200

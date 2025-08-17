@@ -1,25 +1,27 @@
 # ---- Stage 9 Makefile (run from Q_9/) ----
-# Builds ./server and ./client using Graph (../Q_1_to_4) and Stage 7 code (../Q_7)
+# Builds ./server and ./client using Graph (../Q_1_to_4) and Stage 7 code (local)
 
 # Sources (relative to Q_9/)
-CLIENT_SRCS := client.cpp ../Q_7/Socket_class/Client_Socket.cpp
-SERVER_SRCS := server.cpp ../Q_7/Socket_class/Server_Socket.cpp pipeline/Pipeline.cpp
+CLIENT_SRCS := client.cpp Socket_class/Client_Socket.cpp
+SERVER_SRCS := server.cpp Socket_class/Server_Socket.cpp pipeline/Pipeline.cpp
 
 # Compiler/flags
-CXX      := g++
-CXXSTD   := -std=c++17
-CXXWARN  := -Wall -Wextra -Wpedantic
-CXXOPT   := -O2
-CXXMT    := -pthread
-CXXFLAGS := $(CXXSTD) $(CXXWARN) $(CXXOPT) $(CXXMT) -MMD -MP
+CXX       := g++
+CXXSTD    := -std=c++17
+CXXWARN   := -Wall -Wextra -Wpedantic
+CXXOPT    := -O2
+CXXMT     := -pthread
+CXXFLAGS  := $(CXXSTD) $(CXXWARN) $(CXXOPT) $(CXXMT) -MMD -MP
 
 # Includes (relative to Q_9/)
 INCLUDES := -I. \
             -I../Q_1_to_4/Graph \
-            -I../Q_7 -I../Q_7/Strategy -I../Q_7/Factory -I../Q_7/Socket_class \
+            -I./Socket_class \
+            -I./Strategy \
+            -I./Factory \
             -I./pipeline
 
-LDFLAGS  := $(CXXMT)
+LDFLAGS   := $(CXXMT)
 
 # Outputs
 OBJ_DIR     := build/obj
@@ -27,8 +29,8 @@ SERVER_EXE  := server
 CLIENT_EXE  := client
 
 # Objects
-OBJS_CLIENT := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(CLIENT_SRCS))
-OBJS_SERVER := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(SERVER_SRCS))
+OBJS_CLIENT := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(notdir $(CLIENT_SRCS)))
+OBJS_SERVER := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(notdir $(SERVER_SRCS)))
 
 # Default
 .PHONY: all
@@ -53,8 +55,6 @@ $(OBJ_DIR)/%.o: %.cpp
 -include $(OBJS_CLIENT:.o=.d)
 -include $(OBJS_SERVER:.o=.d)
 
-
-
 # ---------- Valgrind helpers ----------
 valgrind_server:
 	@valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes ./server
@@ -78,89 +78,46 @@ callgrind_client:
 %:
 	@:
 
-
-
 # ---------- Coverage (Stage 9) ----------
-.PHONY: cover_server cover_client clean_coverage
+.PHONY: cover_build cover_run_server cover_run_client clean_coverage gcov_report
 
 COVER_CXXFLAGS = -O0 -g --coverage -std=c++17 -fprofile-arcs -ftest-coverage -Wall -Wextra -Wpedantic -pthread \
-                 -I. -Ipipeline -I../Q_1_to_4/Graph -I../Q_7 -I../Q_7/Factory -I../Q_7/Socket_class -I../Q_7/Strategy
+                 -I. -Ipipeline -I./Socket_class -I./Strategy -I../Q_1_to_4/Graph -I./Factory
 COVER_LDFLAGS  = --coverage -pthread
-# Disable GCOV_PREFIX to write .gcda next to .gcno
-GCOV_ENV =
+GCOV_BUILD_DIR := ./coverage_build
 
 clean_coverage:
-	@rm -f *.gcno *.gcda *.gcov
-	@rm -f ../Q_7/Socket_class/*.gcno ../Q_7/Socket_class/*.gcda ../Q_7/Socket_class/*.gcov
-	@rm -f pipeline/*.gcno pipeline/*.gcda pipeline/*.gcov
-	@rm -rf .cov
-	@find . -maxdepth 1 -type d \( -name "Q_[0-9]*" -o -name "home" -o -name "Desktop" -o -name "C++_Amit" -o -name "OS_Final_Versions" -o -name "OS_final" \) -exec rm -rf {} +
+	@echo "[COVER] cleaned old coverage files"
+	@rm -rf *.gcno *.gcda *.gcov pipeline/*.gcno pipeline/*.gcda pipeline/*.gcov Socket_class/*.gcno Socket_class/*.gcda Socket_class/*.gcov $(GCOV_BUILD_DIR)
 	@echo "[COVER] cleaned"
 
+# NEW & CORRECTED: Compile each source file individually
+cover_build: clean_coverage
+	@echo "[COVER] Compiling all sources for coverage"
+	@mkdir -p $(GCOV_BUILD_DIR)
+	g++ $(COVER_CXXFLAGS) -c server.cpp -o $(GCOV_BUILD_DIR)/server.o
+	g++ $(COVER_CXXFLAGS) -c Socket_class/Server_Socket.cpp -o $(GCOV_BUILD_DIR)/Server_Socket.o
+	g++ $(COVER_CXXFLAGS) -c pipeline/Pipeline.cpp -o $(GCOV_BUILD_DIR)/Pipeline.o
+	g++ $(COVER_CXXFLAGS) -c client.cpp -o $(GCOV_BUILD_DIR)/client.o
+	g++ $(COVER_CXXFLAGS) -c Socket_class/Client_Socket.cpp -o $(GCOV_BUILD_DIR)/Client_Socket.o
+	
+	@echo "[COVER] Linking executables for coverage"
+	g++ $(COVER_LDFLAGS) $(GCOV_BUILD_DIR)/server.o $(GCOV_BUILD_DIR)/Server_Socket.o $(GCOV_BUILD_DIR)/Pipeline.o -o $(GCOV_BUILD_DIR)/server_cov
+	g++ $(COVER_LDFLAGS) $(GCOV_BUILD_DIR)/client.o $(GCOV_BUILD_DIR)/Client_Socket.o -o $(GCOV_BUILD_DIR)/client_cov
 
-	@echo "[COVER] cleaned"
+cover_server:
+	@echo "[COVER] Running server. Use make cover_run_client to test. Press CTRL+C to stop."
+	@./$(GCOV_BUILD_DIR)/server_cov
 
-# ---- SERVER coverage ----
-cover_server: clean_coverage 
-	@echo "[COVER] compile server objects WITH coverage"
-	g++ $(COVER_CXXFLAGS) -DGCOV_MODE=1 -c server.cpp -o server.o
-	g++ $(COVER_CXXFLAGS) -c ../Q_7/Socket_class/Server_Socket.cpp -o ../Q_7/Socket_class/Server_Socket.o
-	g++ $(COVER_CXXFLAGS) -c pipeline/Pipeline.cpp -o pipeline/Pipeline.o
-	@echo "[COVER] link server_cov"
-	g++ $(COVER_LDFLAGS) server.o ../Q_7/Socket_class/Server_Socket.o pipeline/Pipeline.o -o server_cov
+cover_client:
+	@echo "[COVER] Running client. You must run a server in another terminal."
+	@if [ -f coverage.in ]; then ./$(GCOV_BUILD_DIR)/client_cov < coverage.in; else ./$(GCOV_BUILD_DIR)/client_cov; fi
 
-	@echo "[COVER] purge old .gcda near .gcno"
-	@rm -f server.gcda ../Q_7/Socket_class/*.gcda pipeline/*.gcda
-
-# before running (no GCOV_PREFIX; write in-place)
-	@echo "[COVER] run server; exercise with your client, then exit gracefully"
-	./server_cov || true
-
-	@echo "[COVER] gcov (focused sources)"
-	@gcov -b -c -r -o .                      server.cpp
-	@gcov -b -c -r -o ../Q_7/Socket_class    ../Q_7/Socket_class/Server_Socket.cpp
-	@gcov -b -c -r -o pipeline               pipeline/Pipeline.cpp
-	@echo "== GCOV (server) DONE =="
-
-# ---- CLIENT coverage (runs a background server) ----
-cover_client: clean_coverage
-	@echo "[COVER] build server_cov (no GCOV_MODE defines needed)"
-	g++ $(COVER_CXXFLAGS) -c server.cpp -o server.o
-	g++ $(COVER_CXXFLAGS) -c ../Q_7/Socket_class/Server_Socket.cpp -o ../Q_7/Socket_class/Server_Socket.o
-	g++ $(COVER_CXXFLAGS) -c pipeline/Pipeline.cpp -o pipeline/Pipeline.o
-	g++ $(COVER_LDFLAGS) server.o ../Q_7/Socket_class/Server_Socket.o pipeline/Pipeline.o -o server_cov
-
-	@echo "[COVER] build client_cov"
-	g++ $(COVER_CXXFLAGS) -c client.cpp -o client.o
-	g++ $(COVER_CXXFLAGS) -c ../Q_7/Socket_class/Client_Socket.cpp -o ../Q_7/Socket_class/Client_Socket.o
-	g++ $(COVER_LDFLAGS) client.o ../Q_7/Socket_class/Client_Socket.o -o client_cov
-
-	@echo "[COVER] start server in background"
-	@( ./server_cov >/dev/null 2>&1 & echo $$! > .srvpid )
-	@sleep 1
-
-	@echo "[COVER] run client"
-	@if [ -f coverage.in ]; then ./client_cov < coverage.in; else ./client_cov; fi
-
-	@echo "[COVER] stop server"
-	@kill -INT $$(cat .srvpid) 2>/dev/null || true
-	@wait $$(cat .srvpid) 2>/dev/null || true
-	@rm -f .srvpid
-
-	@echo "[COVER] collect .gcda and run gcov"
-	@rm -rf .cov && mkdir -p .cov
-	@$(GCOV_ENV) true # no-op; kept to avoid touching other logic
-	@find . -name '*.gcda' -maxdepth 2 -exec cp -f {} . \; 2>/dev/null || true
-	@find ../Q_7/Socket_class -name '*.gcda' -maxdepth 1 -exec true \; 2>/dev/null || true
-
-	@gcov -b -c -r -o .                   client.cpp
-	@gcov -b -c -r -o ../Q_7/Socket_class ../Q_7/Socket_class/Client_Socket.cpp
-	@echo "== GCOV (client) DONE =="
-
-%:
-	@:
-
-
+gcov_report:
+	@echo "[COVER] Collecting coverage reports"
+	@gcov -b -c -r --object-directory=$(GCOV_BUILD_DIR) $(SERVER_SRCS)
+	@gcov -b -c -r --object-directory=$(GCOV_BUILD_DIR) $(CLIENT_SRCS)
+	@echo "== GCOV Reports Printed =="
 
 # Phony helpers (avoid circular names)
 .PHONY: build-server build-client clean print
@@ -177,4 +134,4 @@ clean: clean_coverage
 	@echo "Cleaning Stage 9 build artifacts..."
 	@rm -rf $(OBJ_DIR) $(SERVER_EXE) $(CLIENT_EXE)
 	@rm -f *.o client_cov server_cov
-	@rm -f pipeline/*.o
+	@rm -f pipeline/*.o Socket_class/*.o

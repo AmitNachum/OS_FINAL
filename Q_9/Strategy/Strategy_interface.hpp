@@ -1,0 +1,9 @@
+#pragma once
+#include "AlgoIO.hpp"
+#include "EulerAlgo.hpp"
+#include "HamiltonAlgo.hpp"
+#include "Max_Flow.hpp"
+#include "MST_Algo.hpp"
+#include "SCC_Algo.hpp"
+
+
