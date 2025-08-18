@@ -18,7 +18,7 @@ CLIENT_EXE := client
 
 GCOV_BUILD_DIR := ./coverage_build
 
-VALGRIND_FLAGS := --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose
+VALGRIND_FLAGS := --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --quiet
 
 # ---------- Normal Build ----------
 .PHONY: all
@@ -62,13 +62,15 @@ cover_build: clean_coverage
 	@echo "Linking client_cov..."
 	$(CXX) $(COVER_LDFLAGS) $(patsubst %.cpp,$(GCOV_BUILD_DIR)/%.o,$(notdir $(CLIENT_SRCS))) -o $(GCOV_BUILD_DIR)/client_cov
 
+# ---------- Run server/client coverage easily ----------
+.PHONY: cover_server cover_client
+
 cover_server:
 	@echo "[COVER] Running server coverage build"
 	@./$(GCOV_BUILD_DIR)/server_cov
 
 cover_client:
-	@echo "[COVER] Running client coverage build"
-	@./$(GCOV_BUILD_DIR)/client_cov $(ARGS)
+	@./$(GCOV_BUILD_DIR)/client_cov 
 
 gcov_report:
 	@echo "[COVER] Collecting coverage reports (server)"
@@ -84,20 +86,19 @@ valgrind_server: $(SERVER_EXE)
 	@valgrind $(VALGRIND_FLAGS) ./$(SERVER_EXE)
 
 valgrind_client: $(CLIENT_EXE)
-	@echo "Running client with arguments: $(ARGS)"
-	@valgrind $(VALGRIND_FLAGS) ./$(CLIENT_EXE) $(ARGS)
+	@valgrind $(VALGRIND_FLAGS) ./$(CLIENT_EXE) 
 
 helgrind_server: $(SERVER_EXE)
 	@valgrind --tool=helgrind --history-level=full --track-lockorders=yes --fair-sched=yes ./$(SERVER_EXE)
 
 helgrind_client: $(CLIENT_EXE)
-	@valgrind --tool=helgrind --history-level=full --track-lockorders=yes --fair-sched=yes ./$(CLIENT_EXE) $(ARGS)
+	@valgrind --tool=helgrind --history-level=full --track-lockorders=yes --fair-sched=yes ./$(CLIENT_EXE) 
 
 callgrind_server: $(SERVER_EXE)
 	@valgrind --tool=callgrind --callgrind-out-file=callgrind.$@.out --dump-instr=yes --collect-jumps=yes ./$(SERVER_EXE)
 
 callgrind_client: $(CLIENT_EXE)
-	@valgrind --tool=callgrind --callgrind-out-file=callgrind.$@.out --dump-instr=yes --collect-jumps=yes ./$(CLIENT_EXE) $(ARGS)
+	@valgrind --tool=callgrind --callgrind-out-file=callgrind.$@.out --dump-instr=yes --collect-jumps=yes ./$(CLIENT_EXE) 
 
 # ---------- Clean ----------
 .PHONY: clean

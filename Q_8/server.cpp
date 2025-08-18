@@ -17,6 +17,7 @@
 #include <optional>
 #include <cerrno>
 #include <csignal>
+#include <atomic>
 
 
 
@@ -24,13 +25,8 @@ namespace GI = Graph_implementation;
 using Vertex = int;
 using GraphT = GI::Graph<Vertex>;
 
-volatile sig_atomic_t stop_flag = 0; // for graceful shutdown
 
-static void handle_sigint(int) {
-    std::cout << "\nServer received SIGINT. Shutting down gracefully";
-    stop_flag = 1;
-}   
-
+std::atomic<bool> stop_flag(false);
 
 // ------------------------- small string helpers -------------------------
 static inline void rtrim(std::string& s) {
@@ -79,6 +75,18 @@ struct SharedState {
     bool leader_token   = false;
     bool shutting_down  = false;
 };
+
+
+SharedState* gS = nullptr; // global pointer
+
+static void handle_sigint(int) {
+    std::cout << "\nServer received SIGINT. Shutting down gracefully";
+    stop_flag.store(true);
+    if (gS) {
+        std::lock_guard<std::mutex> lk(gS->leader_mtx);
+        gS->leader_cv.notify_all();
+    }
+}   
 
 // non-blocking recv helper: returns
 //   - ""        -> peer closed
@@ -213,12 +221,12 @@ static void process_line(const std::string& raw, int fd,
 static void worker_loop(ServerSocketTCP& server, SharedState& S) {
     const int listen_fd = server.get_fd();
 
-    while (!stop_flag) {
+    while (!stop_flag.load()) {
         // acquire leader token
         {
             std::unique_lock<std::mutex> lk(S.leader_mtx);
-            S.leader_cv.wait(lk, [&]{ return stop_flag || !S.leader_token || S.shutting_down; });
-            if (stop_flag || S.shutting_down) return;
+            S.leader_cv.wait(lk, [&]{ return stop_flag.load() || !S.leader_token || S.shutting_down; });
+            if (stop_flag.load() || S.shutting_down) return;
             S.leader_token = true;
         }
 
@@ -241,7 +249,8 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S) {
         }
 
         // poll
-        int nready = poll(S.fds.data(), S.fds.size(), NO_TIMEOUT);
+        constexpr int POLL_TIMEOUT_MS = 100;
+        int nready = poll(S.fds.data(), S.fds.size(), POLL_TIMEOUT_MS);
         if (nready < 0) {
             if (errno == EINTR) {//Interrupted Syscall(Mutating errno)
                 std::lock_guard<std::mutex> lk(S.leader_mtx);
@@ -348,6 +357,7 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S) {
 
 int main() {
     SharedState S;
+    gS = &S; 
     std::signal(SIGINT, handle_sigint);
 
 
