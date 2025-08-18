@@ -5,6 +5,8 @@
 #include <memory>
 #include <string>
 #include <algorithm>
+#include <syncstream>
+#define SCOUT std::osyncstream(std::cout)
 
 
 
@@ -20,7 +22,7 @@ public:
         std::transform(name.begin(), name.end(), name.begin(),
                        [](unsigned char c){ return std::tolower(c); });
 
-                       std::cout << "Creating algorithm: " << name << std::endl;
+                       SCOUT << "Creating algorithm: " << name << std::endl;
 
 
         if (name == "hamilton") {

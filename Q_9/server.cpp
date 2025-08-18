@@ -23,19 +23,15 @@
 #include <cerrno>
 #include <atomic>
 #include <csignal> // for signal handling
+#include <syncstream>
+#define SCOUT std::osyncstream(std::cout)
+
+
 
 namespace GI = Graph_implementation;
 using Vertex = int;
 using GraphT = GI::Graph<Vertex>;
-
-// ------------------------- GCOV handler -------------------------
-
-// NEW: Signal handler function
-static void handle_sigint(int) {
-    std::cout << "\nServer received SIGINT. Shutting down gracefully and flushing gcov data..." << std::endl;
-    // We exit here to ensure the program terminates after flushing
-    exit(0);
-}
+std::atomic<bool> stop_flag(false);// Global flag to stop the server
 // ----------------------------------------------------------------
 
 // ------------------------- helpers -------------------------
@@ -80,6 +76,20 @@ struct SharedState {
     bool shutting_down = false;
 };
 
+
+SharedState* gS = nullptr; // global pointer
+
+
+// ---------------- Signal handling ----------------
+static void handle_sigint(int) {
+    std::cerr << "\nServer received SIGINT. Shutting down gracefully";
+    stop_flag.store(true);
+    if (gS) {
+        std::lock_guard<std::mutex> lk(gS->leader_mtx);
+        gS->leader_cv.notify_all();
+    }
+} 
+
 static inline std::string recv_nb(int fd) {
     char buf[4096];
     ssize_t n = ::recv(fd, buf, sizeof(buf), 0);
@@ -115,7 +125,7 @@ static void process_line(const std::string& raw, int fd,
             S.params[fd].reset();
             S.inbuf[fd].clear();
         }
-        std::cout << "Client " << fd << " init: n=" << n
+        SCOUT << "Client " << fd << " init: n=" << n
                   << " (" << (directed ? "directed" : "undirected") << ")\n";
         return;
     }
@@ -134,6 +144,7 @@ static void process_line(const std::string& raw, int fd,
             auto it = S.client_graphs.find(fd);
             if (it != S.client_graphs.end()) g = it->second;
         }
+        
         if (g) g->add_edge(u, v, w);
         else   server.send_to_client(fd, "ERR|Graph not initialized yet.\n");
         return;
@@ -187,10 +198,10 @@ static void process_line(const std::string& raw, int fd,
         const int default_s = 0;
         const int default_t = (n_for_flow > 0 ? n_for_flow - 1 : 0);
 
-        Q9::Job job;
+        Q9::Job job;//Creating a Job struct from the client's input
         job.client_fd = fd;
         job.job_id    = "J" + std::to_string(job_counter++);
-        job.graph     = g;
+        job.graph     = std::make_shared<GraphT>(*g);
         job.directed  = is_dir;
         job.s         = mf_src.has_value()  ? mf_src  : std::optional<int>(default_s);
         job.t         = mf_sink.has_value() ? mf_sink : std::optional<int>(default_t);
@@ -199,7 +210,7 @@ static void process_line(const std::string& raw, int fd,
 
         {
             std::lock_guard<std::mutex> lk(S.state_mtx);
-            S.params[fd].reset();
+            S.params[fd].reset();// Reset params for next job
         }
         return;
     }
@@ -212,34 +223,48 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S,
                         Q9::Pipeline& pipeline, std::atomic<uint64_t>& job_counter)
 {
     const int listen_fd = server.get_fd();
+    std::vector<pollfd> local_snap;
 
-    while (true) {
+    while (!stop_flag.load()) {
         {
+            //Acquire the leader token
             std::unique_lock<std::mutex> lk(S.leader_mtx);
-            S.leader_cv.wait(lk, [&]{ return !S.leader_token || S.shutting_down; });
-            if (S.shutting_down) return;
+            S.leader_cv.wait(lk, [&]{ return stop_flag.load() || !S.leader_token || S.shutting_down; });
+            if (S.shutting_down || stop_flag.load()) return;
             S.leader_token = true;
         }
 
+        
+
         {
+            //Close any pending connections
             std::lock_guard<std::mutex> lk(S.state_mtx);
             for (int fd : S.pending_close) {
                 ::close(fd);
+
                 auto it = std::find_if(S.fds.begin(), S.fds.end(),
                     [&](const pollfd& p){ return p.fd == fd; });
-                if (it != S.fds.end()) S.fds.erase(it);
+                if (it != S.fds.end()) S.fds.erase(it);//Remove the client from the fds vector
+                //Erase client-specific data
                 S.client_graphs.erase(fd);
                 S.graph_n.erase(fd);
                 S.params.erase(fd);
                 S.inbuf.erase(fd);
-                std::cout << "Client " << fd << " closed.\n";
+                SCOUT << "Client " << fd << " closed.\n";
             }
             S.pending_close.clear();
         }
 
-        int nready = poll(S.fds.data(), S.fds.size(), NO_TIMEOUT);
+        {
+            std::lock_guard<std::mutex> lk(S.state_mtx);
+            local_snap = S.fds; // make a snapshot of current fds
+        }
+
+        constexpr int DEF_TIMEOUT = 100; // Poll timeout in ms
+
+        int nready = poll(local_snap.data(), local_snap.size(), DEF_TIMEOUT);// Poll for events
         if (nready < 0) {
-            if (errno == EINTR) {
+            if (errno == EINTR) {// Interrupted Syscall (Mutating errno)
                 std::lock_guard<std::mutex> lk(S.leader_mtx);
                 S.leader_token = false;
                 S.leader_cv.notify_one();
@@ -250,15 +275,16 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S,
                 std::lock_guard<std::mutex> lk(S.leader_mtx);
                 S.shutting_down = true;
                 S.leader_token = false;
+                S.leader_cv.notify_all();
             }
-            S.leader_cv.notify_all();
+            
             return;
         }
 
         int chosen_fd = -1;
         {
             std::lock_guard<std::mutex> lk(S.state_mtx);
-            for (auto& p : S.fds) {
+            for (auto& p : local_snap) {
                 if (p.revents & POLLIN) { chosen_fd = p.fd; p.revents = 0; break; }
             }
         }
@@ -274,30 +300,34 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S,
             int cfd = server.accept_connections();
             if (cfd >= 0) {
                 server.make_non_blocking(cfd);
-                std::cout << "Client " << cfd << " connected.\n";
+                SCOUT << "Client " << cfd << " connected.\n";
             }
+
             {
                 std::lock_guard<std::mutex> lk(S.leader_mtx);
                 S.leader_token = false;
+                S.leader_cv.notify_one();
             }
-            S.leader_cv.notify_one();
+           
             continue;
         }
 
         {
             std::lock_guard<std::mutex> lk(S.leader_mtx);
             S.leader_token = false;
+            S.leader_cv.notify_one();
         }
-        S.leader_cv.notify_one();
+        
 
         bool peer_closed = false;
+        // read all available data; do NOT treat EAGAIN as close
         while (true) {
             std::string chunk = recv_nb(chosen_fd);
             if (chunk.empty()) { peer_closed = true; break; }
             if (chunk == "#NODATA") break;
             {
                 std::lock_guard<std::mutex> lk(S.state_mtx);
-                S.inbuf[chosen_fd] += chunk;
+                S.inbuf[chosen_fd] += chunk;// Append to the client's buffer
             }
             if (chunk.size() < 4096) break;
         }
@@ -308,20 +338,30 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S,
             continue;
         }
 
+        // process complete lines from buffer
+        // swap the inbuf to local to avoid holding the lock
+        // and to allow concurrent processing of multiple clients
         std::string local;
         {
             std::lock_guard<std::mutex> lk(S.state_mtx);
             local.swap(S.inbuf[chosen_fd]);
         }
 
+        // Process each line in the local buffer
+        // This allows processing multiple commands from the same client in one go
+        // Start from the beginning of the local buffer
+        // and process until the end
+        // If we reach the end, we will append any remaining data back to the inbuf
         size_t start = 0;
         for (;;) {
-            size_t pos = local.find('\n', start);
-            if (pos == std::string::npos) {
+            size_t pos = local.find('\n', start);// Find the end of the line
+            if (pos == std::string::npos) {// No more complete lines
                 std::lock_guard<std::mutex> lk(S.state_mtx);
-                S.inbuf[chosen_fd].append(local.substr(start));
-                break;
+                S.inbuf[chosen_fd].append(local.substr(start)); // Append remaining data back to the inbuf
+                break;//
             }
+            // Extract the line
+            // and process it
             std::string line = local.substr(start, pos - start);
             process_line(line, chosen_fd, server, S, pipeline, job_counter);
             start = pos + 1;
@@ -331,12 +371,13 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S,
 
 int main() {
     SharedState S;
+    gS = &S; // Set the global pointer to the shared state
 
     // Register the signal handler for graceful shutdown
     signal(SIGINT, handle_sigint);
     
     ServerSocketTCP server(S.fds);
-    std::cout << "[Server listening on port " << PORT << " TCP]\n";
+    SCOUT << "[Server listening on port " << PORT << " TCP]\n";
 
     // ---------- Stage 9: pipeline ----------
     std::atomic<uint64_t> job_counter{0};
@@ -349,8 +390,8 @@ int main() {
     pipeline.set_scc_func(Q9::run_scc);
     pipeline.set_ham_func(Q9::run_hamilton);
     pipeline.set_maxflow_func(Q9::run_maxflow);
-    pipeline.start();
-    std::cout <<"Starting pipelining...." << std::endl;
+    pipeline.start();// Start the pipeline  
+    SCOUT << "Starting pipelining...." << std::endl;
     // ---------------------------------------
 
     const unsigned N = std::max(2u, std::thread::hardware_concurrency());
@@ -363,8 +404,9 @@ int main() {
     {
         std::lock_guard<std::mutex> lk(S.leader_mtx);
         S.leader_token = false;
+        S.leader_cv.notify_one();
     }
-    S.leader_cv.notify_one();
+    
 
     for (auto& t : pool) if (t.joinable()) t.join();
     for (auto& p : S.fds) ::close(p.fd);
