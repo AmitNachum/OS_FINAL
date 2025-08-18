@@ -39,6 +39,12 @@ private:
         while (m_running.load()) {//read the var value (true | false)
             auto item = m_in.pop();
             if (!item.has_value()) break; // closed and empty
+            
+        // Keep a copy of shared_ptr ONLY when TIn has a .graph member
+        if constexpr (requires (const TIn& x) { x.graph; }) {
+            auto keep_graph = item->graph;
+            (void)keep_graph; // silence unused if optimised out
+        }
             process(std::move(*item));//Active thread handle the task
         }
     }

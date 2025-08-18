@@ -206,7 +206,7 @@ int main() {
 
                 if (start > 0) buf.erase(0, start);
 
-            } catch (...) {
+            } catch (...) {// Catch any exceptions during processing and shutdown the client
                 std::cerr << "Error handling client " << fd << ". Disconnecting.\n";
                 ::close(fd);
                 client_graphs.erase(fd);

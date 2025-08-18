@@ -80,7 +80,7 @@ struct SharedState {
 SharedState* gS = nullptr; // global pointer
 
 static void handle_sigint(int) {
-    std::cout << "\nServer received SIGINT. Shutting down gracefully";
+    std::cerr << "\nServer received SIGINT. Shutting down gracefully";
     stop_flag.store(true);
     if (gS) {
         std::lock_guard<std::mutex> lk(gS->leader_mtx);
@@ -220,6 +220,7 @@ static void process_line(const std::string& raw, int fd,
 // ---------------------- worker loop (Leader–Follower) ----------------------
 static void worker_loop(ServerSocketTCP& server, SharedState& S) {
     const int listen_fd = server.get_fd();
+    std::vector<pollfd> local_snap;
 
     while (!stop_flag.load()) {
         // acquire leader token
@@ -248,9 +249,15 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S) {
             S.pending_close.clear();
         }
 
+
+        {
+            std::lock_guard<std::mutex> lk(S.state_mtx);
+            local_snap = S.fds; // make a snapshot of current fds
+        }
+
         // poll
         constexpr int POLL_TIMEOUT_MS = 100;
-        int nready = poll(S.fds.data(), S.fds.size(), POLL_TIMEOUT_MS);
+        int nready = poll(local_snap.data(), local_snap.size(), POLL_TIMEOUT_MS);
         if (nready < 0) {
             if (errno == EINTR) {//Interrupted Syscall(Mutating errno)
                 std::lock_guard<std::mutex> lk(S.leader_mtx);
@@ -263,8 +270,9 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S) {
                 std::lock_guard<std::mutex> lk(S.leader_mtx);
                 S.shutting_down = true;
                 S.leader_token = false;
+                S.leader_cv.notify_all();   
             }
-            S.leader_cv.notify_all();
+
             return;
         }
 
@@ -272,7 +280,7 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S) {
         int chosen_fd = -1;
         {
             std::lock_guard<std::mutex> lk(S.state_mtx);
-            for (auto& p : S.fds) {
+            for (auto& p : local_snap) {
                 if (p.revents & POLLIN) { chosen_fd = p.fd; p.revents = 0; break; }
             }
         }
@@ -294,8 +302,9 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S) {
             {
                 std::lock_guard<std::mutex> lk(S.leader_mtx);
                 S.leader_token = false;
+                S.leader_cv.notify_one();
             }
-            S.leader_cv.notify_one();
+            
             continue;
         }
 
@@ -303,8 +312,9 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S) {
         {
             std::lock_guard<std::mutex> lk(S.leader_mtx);
             S.leader_token = false;
+            S.leader_cv.notify_one();
         }
-        S.leader_cv.notify_one();
+       
 
         // read all available data; do NOT treat EAGAIN as close
         bool peer_closed = false;
@@ -374,8 +384,9 @@ int main() {
     {
         std::lock_guard<std::mutex> lk(S.leader_mtx);
         S.leader_token = false;
+        S.leader_cv.notify_one();
     }
-    S.leader_cv.notify_one();
+   
 
     for (auto& t : pool) if (t.joinable()) t.join();
     for (auto& p : S.fds) ::close(p.fd);

@@ -103,5 +103,6 @@ callgrind_client: $(CLIENT_EXE)
 # ---------- Clean ----------
 .PHONY: clean
 clean: clean_coverage
+	lsof -i :5555 | grep LISTEN | awk '{print $$2}' | xargs kill -9 || true
 	@echo "Cleaning build artifacts..."
 	@rm -f $(SERVER_EXE) $(CLIENT_EXE) *.o *.gcno *.gcda *.gcov server_cov client_cov

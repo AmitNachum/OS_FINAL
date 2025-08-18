@@ -11,6 +11,7 @@
 #include <sstream>
 #include <vector>
 #include <set>
+#include <mutex>
 
 template <typename K> 
 struct Edge {
@@ -66,15 +67,29 @@ class Graph{
     bool directed_{false}; // global graph mode
 
    public:
-    // directed has default false to keep backward compatibility
+  
     Graph(size_t amount, bool directed=false)
         : vertices_amount(amount), directed_(directed) {}
     ~Graph() = default;
-    Graph(const Graph &other) = delete;
-    Graph& operator=(const Graph &other) = delete;
+
+    Graph(const Graph &other):
+        vertices_amount(other.vertices_amount),
+        graph(other.graph),
+        start_vertex(other.start_vertex),
+        directed_(other.directed_) {}
+
+    Graph& operator=(const Graph &other){
+        if(this != &other) {
+            vertices_amount = other.vertices_amount;
+            graph = other.graph;
+            start_vertex = other.start_vertex;
+            directed_ = other.directed_;
+        }
+    }
+    // Move semantics
     Graph(Graph &&other) = default;
     Graph& operator=(Graph &&other) = default;
-
+     
     bool is_directed() const { return directed_; }
 
     void add_vertex(const T &vertex){

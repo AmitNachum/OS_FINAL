@@ -68,6 +68,7 @@ protected:
             m_out.push(Outgoing{fd, std::move(payload)});
         }
     }
+    
 
 private:
     static void ensure_nl(std::string& s) {
