@@ -5,7 +5,7 @@ CXXSTD := -std=c++20
 CXXWARN := -Wall -Wextra -Wpedantic
 CXXMT := -pthread
 # בנייה רגילה: מכבה נתיבי GCOV בקוד
-CXXFLAGS := $(CXXSTD) $(CXXWARN) $(CXXMT) -DGCOV_MODE=0
+CXXFLAGS := $(CXXSTD) $(CXXWARN) $(CXXMT) 
 
 INCLUDES := -I. -I../Q_1_to_4/Graph -I../Q_6 -I../Q_7 -I../Q_7/Factory -I../Q_7/Socket_class -I../Q_7/Strategy
 
@@ -36,7 +36,7 @@ $(CLIENT_EXE): $(CLIENT_SRCS)
 .PHONY: cover_build cover_server cover_client clean_coverage gcov_report
 
 # כיסוי: מדליק את נתיבי GCOV בקוד
-COVER_CXXFLAGS := -O0 -g --coverage -fprofile-arcs -ftest-coverage $(CXXSTD) $(CXXWARN) $(CXXMT) -DGCOV_MODE=1 $(INCLUDES)
+COVER_CXXFLAGS := -O0 -g --coverage -fprofile-arcs -ftest-coverage $(CXXSTD) $(CXXWARN) $(CXXMT) $(INCLUDES)
 COVER_LDFLAGS := --coverage $(CXXMT)
 
 clean_coverage:

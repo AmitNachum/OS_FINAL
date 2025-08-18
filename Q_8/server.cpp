@@ -18,13 +18,18 @@
 #include <cerrno>
 #include <csignal>
 
-#ifndef GCOV_MODE
-#define GCOV_MODE 0
-#endif
+
 
 namespace GI = Graph_implementation;
 using Vertex = int;
 using GraphT = GI::Graph<Vertex>;
+
+volatile sig_atomic_t stop_flag = 0; // for graceful shutdown
+
+static void handle_sigint(int) {
+    std::cout << "\nServer received SIGINT. Shutting down gracefully";
+    stop_flag = 1;
+}   
 
 
 // ------------------------- small string helpers -------------------------
@@ -89,34 +94,7 @@ static inline std::string recv_nb(int fd) {
     return std::string();
 }
 
-// declare a global pointer to the SharedState
-static SharedState* g_shared_state = nullptr;
 
-// ---------------------- signal handler for SIGINT ----------------------
-static void handle_sigint(int) {
-    std::cout << "\nServer received SIGINT. Shutting down gracefully and flushing gcov data..." << std::endl;
-    
-    if (g_shared_state) {
-        std::lock_guard<std::mutex> lk(g_shared_state->state_mtx);
-        for (auto& p : g_shared_state->fds) {
-            ::close(p.fd);
-        }
-        g_shared_state->fds.clear();
-        g_shared_state->pending_close.clear();
-        g_shared_state->client_graphs.clear();
-        g_shared_state->graph_n.clear();
-        g_shared_state->params.clear();
-        g_shared_state->inbuf.clear();
-    }
-
-#if GCOV_MODE
-    std::cout << " and flushing gcov data";
-    extern "C" void __gcov_flush(void);
-    __gcov_flush();
-#endif
-
-    std::exit(0);
-}
 
 // ---------------------- one-line protocol handler ----------------------
 static void process_line(const std::string& raw, int fd,
@@ -235,12 +213,12 @@ static void process_line(const std::string& raw, int fd,
 static void worker_loop(ServerSocketTCP& server, SharedState& S) {
     const int listen_fd = server.get_fd();
 
-    while (true) {
+    while (!stop_flag) {
         // acquire leader token
         {
             std::unique_lock<std::mutex> lk(S.leader_mtx);
-            S.leader_cv.wait(lk, [&]{ return !S.leader_token || S.shutting_down; });
-            if (S.shutting_down) return;
+            S.leader_cv.wait(lk, [&]{ return stop_flag || !S.leader_token || S.shutting_down; });
+            if (stop_flag || S.shutting_down) return;
             S.leader_token = true;
         }
 
@@ -257,9 +235,7 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S) {
                 S.params.erase(fd);
                 S.inbuf.erase(fd);
                 std::cout << "Client " << fd << " closed.\n";
-#if GCOV_MODE
-                    handle_sigint(0); // flush coverage and exit if enabled
-#endif
+
             }
             S.pending_close.clear();
         }
@@ -372,8 +348,6 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S) {
 
 int main() {
     SharedState S;
-    g_shared_state = &S;
-
     std::signal(SIGINT, handle_sigint);
 
 
