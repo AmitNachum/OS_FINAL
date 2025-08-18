@@ -17,7 +17,7 @@ CLIENT_EXE := client
 
 GCOV_BUILD_DIR := ./coverage_build
 
-VALGRIND_FLAGS := --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose
+VALGRIND_FLAGS := --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --quiet
 
 # ---------- Normal Build ----------
 

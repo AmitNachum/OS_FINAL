@@ -16,9 +16,6 @@
 #include <string>
 #include <csignal>   // <- for SIGINT
 
-#ifndef GCOV_MODE
-#define GCOV_MODE 0
-#endif
 using Vertex = int;
 
 volatile sig_atomic_t stop_flag = 0;
@@ -28,10 +25,6 @@ static std::vector<int> all_fds;  // keep track of all sockets for cleanup
 
 static void handle_sigint(int) {
     std::cout << "\nServer received SIGINT. Shutting down gracefully";
-#if GCOV_MODE
-    std::cout << " and flushing gcov data";
-    __gcov_flush();
-#endif
     stop_flag = 1;
 }
 
@@ -114,9 +107,6 @@ int main() {
                     fds.erase(fds.begin() + i);
                     --i;
                     std::cout << "Client " << fd << " disconnected.\n";
-#if GCOV_MODE
-                    handle_sigint(0); // flush coverage and exit if enabled
-#endif
                     continue;
                 }
 
