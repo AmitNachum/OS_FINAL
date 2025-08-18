@@ -14,11 +14,29 @@
 #include <algorithm>
 #include <cctype>
 #include <string>
+#include <csignal>   // <- for SIGINT
 
 #ifndef GCOV_MODE
 #define GCOV_MODE 0
 #endif
 using Vertex = int;
+
+// ---------------- Signal handling ----------------
+static std::vector<int> all_fds;  // keep track of all sockets for cleanup
+
+static void handle_sigint(int) {
+    std::cout << "\nServer received SIGINT. Shutting down gracefully";
+#if GCOV_MODE
+    std::cout << " and flushing gcov data";
+    __gcov_flush();
+#endif
+    std::cout << "...\n";
+
+    for (int fd : all_fds) {
+        if (fd != -1) ::close(fd);
+    }
+    exit(0);
+}
 
 // ---- helpers: trim / lowercase ------------------------------------------------
 static inline void rtrim(std::string& s) {
@@ -41,17 +59,24 @@ static inline std::string tolower_copy(std::string s) {
 } 
 // -----------------------------------------------------------------------------
 
+
 int main() {
+    // Register signal handler for Ctrl+C
+    std::signal(SIGINT, handle_sigint);
+
     // One graph per connected client
     std::unordered_map<int, std::shared_ptr<Graph<Vertex>>> client_graphs;
-    // for printing/menu only (kept like before)
+    // for printing/menu only
     std::unordered_map<int, bool> graph_direction;
-    // NEW: per-client receive buffer for partial lines
+    // per-client receive buffer for partial lines
     std::unordered_map<int, std::string> recv_buf;
 
     std::vector<pollfd> fds;
     ServerSocketTCP server(fds);
     int listen_fd = server.get_fd();
+
+    // Track all sockets for cleanup on SIGINT
+    all_fds.push_back(listen_fd);
 
     std::cout << "[Server listening on port " << PORT << " TCP]" << std::endl;
 
@@ -75,35 +100,32 @@ int main() {
                 if (client_fd < 0) continue;
 
                 server.make_non_blocking(client_fd);
-                // accept_connections() already pushed client_fd to fds inside ServerSocketTCP
+                all_fds.push_back(client_fd); // track for cleanup
                 std::cout << "Client " << client_fd << " connected.\n";
                 continue;
             }
 
             // Handle data from a client
             try {
-                // read one chunk (non-blocking)
                 std::string chunk = server.recv_from_client(fd);
                 if (chunk.empty()) {
                     // client closed
                     ::close(fd);
                     client_graphs.erase(fd);
                     graph_direction.erase(fd);
-                    recv_buf.erase(fd); // clear its pending bytes
+                    recv_buf.erase(fd);
                     fds.erase(fds.begin() + i);
                     --i;
                     std::cout << "Client " << fd << " disconnected.\n";
-                            #if GCOV_MODE 
-                            goto end;
-                            #endif 
+#if GCOV_MODE
+                    handle_sigint(0); // flush coverage and exit if enabled
+#endif
                     continue;
                 }
 
-                // append to this client's accumulator
                 std::string& buf = recv_buf[fd];
                 buf += chunk;
 
-                // extract complete lines (newline-terminated)
                 size_t start = 0;
                 while (true) {
                     size_t nl = buf.find('\n', start);
@@ -112,14 +134,10 @@ int main() {
                     std::string rawline = buf.substr(start, nl - start);
                     start = nl + 1;
 
-                    // normalize (strip CR if CRLF)
                     if (!rawline.empty() && rawline.back() == '\r') rawline.pop_back();
-
-                    if (rawline.empty()) continue;
                     trim(rawline);
                     if (rawline.empty()) continue;
 
-                    // Extract command token (before first '|') and normalize to lowercase
                     std::string cmd = rawline.substr(0, rawline.find('|'));
                     cmd = tolower_copy(cmd);
 
@@ -131,16 +149,14 @@ int main() {
                         std::getline(ss, tok, '|'); int n = std::stoi(tok);
                         std::getline(ss, tok, '|'); bool directed = (tok == "1");
 
-                        // Build the graph with the directed flag INSIDE the class
                         auto g = std::make_shared<Graph<Vertex>>(n, directed);
                         client_graphs[fd] = g;
-                        graph_direction[fd] = directed; // for menu/printing only
+                        graph_direction[fd] = directed;
 
                         std::cout << "Initialized graph for client " << fd
                                   << " with " << n << " vertices ("
                                   << (directed ? "directed" : "undirected") << ")\n";
 
-                        // Always send a fresh menu right after init
                         send_menu(server, fd);
                         continue;
                     }
@@ -155,14 +171,11 @@ int main() {
                         std::getline(ss, tok, '|'); double w = std::stod(tok);
 
                         if (client_graphs.count(fd)) {
-                            // Add edge according to the graph's internal directed_ flag.
                             client_graphs[fd]->add_edge(u, v, w);
                         }
-                        // No immediate response; the client will request an action next
                         continue;
                     }
 
-                    // From here on we expect an action on an existing graph
                     if (!client_graphs.count(fd)) {
                         server.send_to_client(fd, "ERR|Graph not initialized yet.\n");
                         send_menu(server, fd);
@@ -181,8 +194,6 @@ int main() {
                     }
 
                     // ------------------ ALGORITHMS ---------------------
-                    // Parse the request using factory-compatible format.
-                    // DO NOT block by graph type here — the Graph class dispatches internally.
                     Request<Vertex> req = parse_request<Vertex>(rawline, g);
 
                     try {
@@ -193,7 +204,6 @@ int main() {
                             ? algo->run(req)
                             : Response{ false, std::string("Unknown algorithm: ") + cmd };
 
-                        // Guard against empty string responses from algorithms
                         if (resp.response.empty()) {
                             resp.ok = false;
                             resp.response = "Algorithm returned no output";
@@ -204,11 +214,9 @@ int main() {
                         server.send_to_client(fd, std::string("ERR|") + e.what() + "\n");
                     }
 
-                    // Always end with the menu so the client knows the response is complete
                     send_menu(server, fd);
                 }
 
-                // keep only the unconsumed tail (no newline yet)
                 if (start > 0) buf.erase(0, start);
 
             } catch (...) {
@@ -221,9 +229,12 @@ int main() {
                 --i;
             }
         }
- 
+
     }
-    end:
-    ::close(listen_fd);
+
+    // Cleanup on normal exit
+    for (int fd : all_fds) {
+        if (fd != -1) ::close(fd);
+    }
     return 0;
 }
