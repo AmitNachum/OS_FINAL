@@ -21,6 +21,8 @@
 #endif
 using Vertex = int;
 
+volatile sig_atomic_t stop_flag = 0;
+
 // ---------------- Signal handling ----------------
 static std::vector<int> all_fds;  // keep track of all sockets for cleanup
 
@@ -30,12 +32,7 @@ static void handle_sigint(int) {
     std::cout << " and flushing gcov data";
     __gcov_flush();
 #endif
-    std::cout << "...\n";
-
-    for (int fd : all_fds) {
-        if (fd != -1) ::close(fd);
-    }
-    exit(0);
+    stop_flag = 1;
 }
 
 // ---- helpers: trim / lowercase ------------------------------------------------
@@ -80,7 +77,7 @@ int main() {
 
     std::cout << "[Server listening on port " << PORT << " TCP]" << std::endl;
 
-    while (true) {
+    while (!stop_flag) {
         int nready = poll(fds.data(), fds.size(), NO_TIMEOUT);
         if (nready < 0) {
             perror("poll");
@@ -233,8 +230,11 @@ int main() {
     }
 
     // Cleanup on normal exit
-    for (int fd : all_fds) {
-        if (fd != -1) ::close(fd);
-    }
+    client_graphs.clear();
+    graph_direction.clear();
+    recv_buf.clear();
+    for (int fd : all_fds) if (fd != -1) ::close(fd);
+    fds.clear();
+    all_fds.clear();
     return 0;
 }

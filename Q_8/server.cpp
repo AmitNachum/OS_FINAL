@@ -16,13 +16,16 @@
 #include <condition_variable>
 #include <optional>
 #include <cerrno>
+#include <csignal>
 
-
-
+#ifndef GCOV_MODE
+#define GCOV_MODE 0
+#endif
 
 namespace GI = Graph_implementation;
 using Vertex = int;
 using GraphT = GI::Graph<Vertex>;
+
 
 // ------------------------- small string helpers -------------------------
 static inline void rtrim(std::string& s) {
@@ -84,6 +87,35 @@ static inline std::string recv_nb(int fd) {
     if (errno == EAGAIN || errno == EWOULDBLOCK) return std::string("#NODATA");
     // treat other errors as closure for simplicity
     return std::string();
+}
+
+// declare a global pointer to the SharedState
+static SharedState* g_shared_state = nullptr;
+
+// ---------------------- signal handler for SIGINT ----------------------
+static void handle_sigint(int) {
+    std::cout << "\nServer received SIGINT. Shutting down gracefully and flushing gcov data..." << std::endl;
+    
+    if (g_shared_state) {
+        std::lock_guard<std::mutex> lk(g_shared_state->state_mtx);
+        for (auto& p : g_shared_state->fds) {
+            ::close(p.fd);
+        }
+        g_shared_state->fds.clear();
+        g_shared_state->pending_close.clear();
+        g_shared_state->client_graphs.clear();
+        g_shared_state->graph_n.clear();
+        g_shared_state->params.clear();
+        g_shared_state->inbuf.clear();
+    }
+
+#if GCOV_MODE
+    std::cout << " and flushing gcov data";
+    extern "C" void __gcov_flush(void);
+    __gcov_flush();
+#endif
+
+    std::exit(0);
 }
 
 // ---------------------- one-line protocol handler ----------------------
@@ -225,9 +257,9 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S) {
                 S.params.erase(fd);
                 S.inbuf.erase(fd);
                 std::cout << "Client " << fd << " closed.\n";
-                #if GCOV_MODE
-                 std::exit(0);
-                 #endif
+#if GCOV_MODE
+                    handle_sigint(0); // flush coverage and exit if enabled
+#endif
             }
             S.pending_close.clear();
         }
@@ -340,6 +372,10 @@ static void worker_loop(ServerSocketTCP& server, SharedState& S) {
 
 int main() {
     SharedState S;
+    g_shared_state = &S;
+
+    std::signal(SIGINT, handle_sigint);
+
 
     ServerSocketTCP server(S.fds);
     std::cout << "[Server listening on port " << PORT << " TCP]\n";

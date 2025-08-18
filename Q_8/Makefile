@@ -1,152 +1,106 @@
+# ---- Stage 8 Makefile with Build + Coverage + Tools ----
+
 CXX := g++
-CXXFLAGS := -std=c++17 -Wall -Wextra -pthread \
-  -I. \
-  -I../Q_1_to_4/Graph \
-  -I../Q_6 \
-  -I../Q_7 \
-  -I../Q_7/Factory \
-  -I../Q_7/Socket_class \
-  -I../Q_7/Strategy
+CXXSTD := -std=c++20
+CXXWARN := -Wall -Wextra -Wpedantic
+CXXMT := -pthread
+# בנייה רגילה: מכבה נתיבי GCOV בקוד
+CXXFLAGS := $(CXXSTD) $(CXXWARN) $(CXXMT) -DGCOV_MODE=0
 
-LDFLAGS := -pthread
+INCLUDES := -I. -I../Q_1_to_4/Graph -I../Q_6 -I../Q_7 -I../Q_7/Factory -I../Q_7/Socket_class -I../Q_7/Strategy
 
-# Binaries
-all: server client
+# Sources
+SERVER_SRCS := server.cpp ../Q_7/Socket_class/Server_Socket.cpp
+CLIENT_SRCS := client.cpp ../Q_7/Socket_class/Client_Socket.cpp
 
-server: server.cpp ../Q_7/Socket_class/Server_Socket.cpp run_all.hpp
-	$(CXX) $(CXXFLAGS) server.cpp ../Q_7/Socket_class/Server_Socket.cpp -o $@ $(LDFLAGS)
+SERVER_EXE := server
+CLIENT_EXE := client
 
-client: client.cpp ../Q_7/Socket_class/Client_Socket.cpp
-	$(CXX) $(CXXFLAGS) client.cpp ../Q_7/Socket_class/Client_Socket.cpp -o $@ $(LDFLAGS)
+GCOV_BUILD_DIR := ./coverage_build
 
+VALGRIND_FLAGS := --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose
 
-# ---------- Valgrind helpers ----------
-valgrind_server:
-	@valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes ./server
+# ---------- Normal Build ----------
+.PHONY: all
+all: $(SERVER_EXE) $(CLIENT_EXE)
 
-valgrind_client:
-	@valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes ./client
+$(SERVER_EXE): $(SERVER_SRCS)
+	@echo "Compiling server"
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
 
-helgrind_server:
-	@valgrind --tool=helgrind --history-level=full --track-lockorders=yes --fair-sched=yes ./server
+$(CLIENT_EXE): $(CLIENT_SRCS)
+	@echo "Compiling client"
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $@
 
-helgrind_client:
-	@valgrind --tool=helgrind --history-level=full --track-lockorders=yes --fair-sched=yes ./client
+# ---------- Coverage ----------
+.PHONY: cover_build cover_server cover_client clean_coverage gcov_report
 
-callgrind_server:
-	@valgrind --tool=callgrind --callgrind-out-file=callgrind.$@.out --dump-instr=yes --collect-jumps=yes ./server
+# כיסוי: מדליק את נתיבי GCOV בקוד
+COVER_CXXFLAGS := -O0 -g --coverage -fprofile-arcs -ftest-coverage $(CXXSTD) $(CXXWARN) $(CXXMT) -DGCOV_MODE=1 $(INCLUDES)
+COVER_LDFLAGS := --coverage $(CXXMT)
 
-callgrind_client:
-	@valgrind --tool=callgrind --callgrind-out-file=callgrind.$@.out --dump-instr=yes --collect-jumps=yes ./client
-
-# Swallow extra words after the first target so make doesn't treat them as targets
-%:
-	@:
-
-# ---------- Coverage (Q_8) ----------
-.PHONY: cover_server cover_client clean_coverage clean
-
-# Clean coverage artifacts anywhere (Q_8 and the reused Q_7 sockets)
 clean_coverage:
-	@find . -type f \( -name '*.gcno' -o -name '*.gcda' -o -name '*.gcov' \) -delete
-	@find ../Q_7 -type f \( -name '*.gcno' -o -name '*.gcda' -o -name '*.gcov' \) -delete
-	@rm -f server_cov client_cov .srvpid
-	@echo "[COVER] cleaned"
-	@rm -f *.gcno *.gcda *.gcov
-	@rm -f ../Q_7/Socket_class/*.gcno ../Q_7/Socket_class/*.gcda ../Q_7/Socket_class/*.gcov
-	@rm -rf .cov ./home ./amit ./Desktop ./C++_Amit ./OS_Final_Versions ./OS_final ./Q_7 ./Q_8
-	@echo "[COVER] cleaned"
+	@echo "[COVER] Cleaning old coverage files"
+	@rm -rf *.gcno *.gcda *.gcov $(GCOV_BUILD_DIR)
+	@mkdir -p $(GCOV_BUILD_DIR)
+	@echo "[COVER] Done cleaning"
 
-# -------------------- SERVER --------------------
+cover_build: clean_coverage
+	@echo "[COVER] Compiling server for coverage"
+	@for f in $(SERVER_SRCS); do \
+	  echo "Compiling $$f..."; \
+	  $(CXX) $(COVER_CXXFLAGS) -c $$f -o $(GCOV_BUILD_DIR)/$$(basename $$f .cpp).o; \
+	done
+	@echo "Linking server_cov..."
+	$(CXX) $(COVER_LDFLAGS) $(patsubst %.cpp,$(GCOV_BUILD_DIR)/%.o,$(notdir $(SERVER_SRCS))) -o $(GCOV_BUILD_DIR)/server_cov
+
+	@echo "[COVER] Compiling client for coverage"
+	@for f in $(CLIENT_SRCS); do \
+	  echo "Compiling $$f..."; \
+	  $(CXX) $(COVER_CXXFLAGS) -c $$f -o $(GCOV_BUILD_DIR)/$$(basename $$f .cpp).o; \
+	done
+	@echo "Linking client_cov..."
+	$(CXX) $(COVER_LDFLAGS) $(patsubst %.cpp,$(GCOV_BUILD_DIR)/%.o,$(notdir $(CLIENT_SRCS))) -o $(GCOV_BUILD_DIR)/client_cov
+
 cover_server:
-    # 1. Clean up old coverage files
-	rm -f *.o *.gcno *.gcda *.gcov
-	rm -f ../Q_7/Socket_class/*.o ../Q_7/Socket_class/*.gcno ../Q_7/Socket_class/*.gcda ../Q_7/Socket_class/*.gcov
-    
-    # 2. Compile server objects
-	g++ -O0 -g --coverage -std=c++17 -Wall -Wextra -pthread \
-		-I. -I../Q_1_to_4/Graph -I../Q_6 -I../Q_7 -I../Q_7/Factory -I../Q_7/Socket_class -I../Q_7/Strategy \
-		-DGCOV_MODE=1 -c server.cpp -o server.o
-	g++ -O0 -g --coverage -std=c++17 -Wall -Wextra -pthread \
-		-I. -I../Q_1_to_4/Graph -I../Q_6 -I../Q_7 -I../Q_7/Factory -I../Q_7/Socket_class -I../Q_7/Strategy \
-		-DGCOV_MODE=1 -c ../Q_7/Socket_class/Server_Socket.cpp -o ../Q_7/Socket_class/Server_Socket.o
-        
-    # 3. Link executable
-	g++ --coverage server.o ../Q_7/Socket_class/Server_Socket.o -pthread -o server_cov
-    
-# 4) Run server → write .gcda under ./.cov (no clashes)
-	@rm -rf .cov
-	@mkdir -p .cov
-	@GCOV_PREFIX="$(CURDIR)/.cov" GCOV_PREFIX_STRIP=6 ./server_cov
+	@echo "[COVER] Running server coverage build"
+	@./$(GCOV_BUILD_DIR)/server_cov
 
-# 5) Move/overlay the generated .gcda back next to their .gcno
-	@cd .cov && find . -name '*.gcda' -exec cp --parents -f {} .. \;
-	@echo "Have files:" && ls -l server.gcno server.gcda || true
+cover_client:
+	@echo "[COVER] Running client coverage build"
+	@./$(GCOV_BUILD_DIR)/client_cov $(ARGS)
 
+gcov_report:
+	@echo "[COVER] Collecting coverage reports (server)"
+	@gcov -b -c -r --object-directory=$(GCOV_BUILD_DIR) $(SERVER_SRCS)
+	@echo "[COVER] Collecting coverage reports (client)"
+	@gcov -b -c -r --object-directory=$(GCOV_BUILD_DIR) $(CLIENT_SRCS)
+	@echo "== GCOV Reports Printed =="
 
-# 6) Now gcov can see matching pairs; run it only for the files you care about
-	@gcov -b -c -r -o . server.cpp
-	@gcov -b -c -r -o ../Q_7/Socket_class ../Q_7/Socket_class/Server_Socket.cpp
+# ---------- Valgrind / Helgrind / Callgrind ----------
+.PHONY: valgrind_server valgrind_client helgrind_server helgrind_client callgrind_server callgrind_client
 
+valgrind_server: $(SERVER_EXE)
+	@valgrind $(VALGRIND_FLAGS) ./$(SERVER_EXE)
 
+valgrind_client: $(CLIENT_EXE)
+	@echo "Running client with arguments: $(ARGS)"
+	@valgrind $(VALGRIND_FLAGS) ./$(CLIENT_EXE) $(ARGS)
 
+helgrind_server: $(SERVER_EXE)
+	@valgrind --tool=helgrind --history-level=full --track-lockorders=yes --fair-sched=yes ./$(SERVER_EXE)
 
-# -------------------- CLIENT --------------------
-cover_client: clean_coverage
-	@echo "[COVER] compile server objects WITH coverage (NO GCOV_MODE here)"
-	g++ -O0 -g --coverage -std=c++17 -Wall -Wextra -pthread \
-	    -I. -I../Q_1_to_4/Graph -I../Q_6 -I../Q_7 -I../Q_7/Factory -I../Q_7/Socket_class -I../Q_7/Strategy \
-	    -c server.cpp -o server.o
-	g++ -O0 -g --coverage -std=c++17 -Wall -Wextra -pthread \
-	    -I. -I../Q_1_to_4/Graph -I../Q_6 -I../Q_7 -I../Q_7/Factory -I../Q_7/Socket_class -I../Q_7/Strategy \
-	    -c ../Q_7/Socket_class/Server_Socket.cpp -o ../Q_7/Socket_class/Server_Socket.o
-	@echo "[COVER] link server_cov"
-	g++ --coverage server.o ../Q_7/Socket_class/Server_Socket.o -pthread -o server_cov
+helgrind_client: $(CLIENT_EXE)
+	@valgrind --tool=helgrind --history-level=full --track-lockorders=yes --fair-sched=yes ./$(CLIENT_EXE) $(ARGS)
 
-	@echo "[COVER] compile client objects WITH coverage (GCOV_MODE=1 is fine)"
-	g++ -O0 -g --coverage -std=c++17 -Wall -Wextra -pthread \
-	    -I. -I../Q_1_to_4/Graph -I../Q_6 -I../Q_7 -I../Q_7/Factory -I../Q_7/Socket_class -I../Q_7/Strategy \
-	    -DGCOV_MODE=1 -c client.cpp -o client.o
-	g++ -O0 -g --coverage -std=c++17 -Wall -Wextra -pthread \
-	    -I. -I../Q_1_to_4/Graph -I../Q_6 -I../Q_7 -I../Q_7/Factory -I../Q_7/Socket_class -I../Q_7/Strategy \
-	    -DGCOV_MODE=1 -c ../Q_7/Socket_class/Client_Socket.cpp -o ../Q_7/Socket_class/Client_Socket.o
-	@echo "[COVER] link client_cov"
-	g++ --coverage client.o ../Q_7/Socket_class/Client_Socket.o -pthread -o client_cov
+callgrind_server: $(SERVER_EXE)
+	@valgrind --tool=callgrind --callgrind-out-file=callgrind.$@.out --dump-instr=yes --collect-jumps=yes ./$(SERVER_EXE)
 
-	@echo "[COVER] start server_cov in background"
-	@( ./server_cov >/dev/null 2>&1 & echo $$! > .srvpid )
-	@sleep 1.0
+callgrind_client: $(CLIENT_EXE)
+	@valgrind --tool=callgrind --callgrind-out-file=callgrind.$@.out --dump-instr=yes --collect-jumps=yes ./$(CLIENT_EXE) $(ARGS)
 
-	@echo "[COVER] run client_cov (use coverage.in if present)"
-	@if [ -f coverage.in ]; then ./client_cov < coverage.in; else ./client_cov; fi
-
-	@echo "[COVER] stop background server"
-	@kill -INT $$(cat .srvpid) 2>/dev/null || true
-	@wait $$(cat .srvpid) 2>/dev/null || true
-	@rm -f .srvpid
-
-	@echo "[COVER] generate .gcov for client"
-	- gcov -b -c -r -o client.o                                   client.cpp
-	- gcov -b -c -r -o ../Q_7/Socket_class/Client_Socket.o        ../Q_7/Socket_class/Client_Socket.cpp
-	@echo "== GCOV (client) DONE =="
-
-
-# ---------- Cleanup ----------
+# ---------- Clean ----------
+.PHONY: clean
 clean: clean_coverage
-	@rm -f server client server_cov client_cov *.o callgrind.*.out
-	@echo "Clean complete."
-	
-
-
-clean:
-	-lsof -t -i:5555 | xargs kill || true
-	rm -f server client
-	rm -f *.o *.gcno *.gcda *.gcov
-	rm -f $(wildcard ../Q_7/Socket_class/*.o)
-	rm -f $(wildcard ../Q_7/Socket_class/*.gcno)
-	rm -f $(wildcard ../Q_7/Socket_class/*.gcda)
-	rm -f $(wildcard ../Q_7/Socket_class/*.gcov)
-	rm -f server_cov client_cov
-	rm -f callgrind.callgrind_server.out
-	rm -rf .cov
-
+	@echo "Cleaning build artifacts..."
+	@rm -f $(SERVER_EXE) $(CLIENT_EXE) *.o *.gcno *.gcda *.gcov server_cov client_cov
