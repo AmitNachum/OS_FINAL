@@ -11,8 +11,10 @@
 #include "AO_Aggregator.hpp"
 #include "AO_Algo.hpp"
 #include "AO_Fanout.hpp"
+#include <mutex>
 
 namespace Q9 {
+    static std::mutex m_pipeline_mtx{}; // Mutex to protect the pipeline state
 
 // Pipeline wires all active objects together, exposing submit() to the server.
 class Pipeline {
@@ -49,6 +51,7 @@ private:
 
     AO_Algo::AlgoFunc m_mst_func, m_scc_func, m_ham_func, m_flow_func;
     std::atomic<bool> m_started{false};
+    
 };
 
 } // namespace Q9

@@ -4,7 +4,6 @@ CXX := g++
 CXXSTD := -std=c++20
 CXXWARN := -Wall -Wextra -Wpedantic
 CXXMT := -pthread
-# בנייה רגילה: מכבה נתיבי GCOV בקוד
 CXXFLAGS := $(CXXSTD) $(CXXWARN) $(CXXMT) 
 
 INCLUDES := -I. -I../Q_1_to_4/Graph -I../Q_6 -I../Q_7 -I../Q_7/Factory -I../Q_7/Socket_class -I../Q_7/Strategy
@@ -106,3 +105,4 @@ clean: clean_coverage
 	lsof -i :5555 | grep LISTEN | awk '{print $$2}' | xargs kill -9 || true
 	@echo "Cleaning build artifacts..."
 	@rm -f $(SERVER_EXE) $(CLIENT_EXE) *.o *.gcno *.gcda *.gcov server_cov client_cov
+	@rm -f callgrind.*.out

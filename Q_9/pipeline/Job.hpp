@@ -21,6 +21,9 @@ struct Job {
     std::optional<int> s;               // Max-Flow source (if provided)
     std::optional<int> t;               // Max-Flow sink (if provided)
     bool directed = true;               // Whether the graph is directed
+
+    Job() = default;                    // Default constructor
+
 };
 
 } // namespace Q9

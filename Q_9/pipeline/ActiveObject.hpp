@@ -3,8 +3,10 @@
 #include <atomic>
 #include <functional>
 #include "BlockingQueue.hpp"
+#include <mutex>
 
 namespace Q9 {
+    static std::mutex thread_lock_mtx = std::mutex(); // Mutex for thread safety
 
 // Base Anstract Class Active Object that consumes items from a BlockingQueue and processes them.
 // Derive and implement process(T&&) to perform work on each item.
@@ -19,6 +21,7 @@ public:
     virtual ~ActiveObject() { stop(); }
 
     void start() {
+        std::lock_guard<std::mutex> lk(thread_lock_mtx); // Lock the global mutex
         bool exp = false;
         if (!m_running.compare_exchange_strong(exp, true)) return;
         m_thread = std::thread([this]{ this->run(); }); // Setting the Active Thread
@@ -40,12 +43,8 @@ private:
             auto item = m_in.pop();
             if (!item.has_value()) break; // closed and empty
             
-        // Keep a copy of shared_ptr ONLY when TIn has a .graph member
-        if constexpr (requires (const TIn& x) { x.graph; }) {
-            auto keep_graph = item->graph;
-            (void)keep_graph; // silence unused if optimised out
-        }
             process(std::move(*item));//Active thread handle the task
+            
         }
     }
 
@@ -57,6 +56,7 @@ private:
                                 threads read/write without any data racing
                                 CPU Usage is atomically*/
     std::thread m_thread;
+    
 };
 
 } // namespace Q9

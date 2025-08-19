@@ -23,7 +23,6 @@ public:
 
 protected:
     void process(Job&& job) override {
-        // Build graph header exactly like stage 8
         std::ostringstream hdr;
         hdr << "===== Graph =====\n";
         hdr << job.graph->to_string_with_weights(false) << "\n\n";

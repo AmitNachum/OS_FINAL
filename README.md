@@ -76,27 +76,70 @@ OS_final/
 
 ---
 
-## Building
+## Building and Running
 
-To compile all modules:
+### Top-Level Makefile
+
+From the root:
 
 ```bash
-make all
+make all                 # build all stages
+make clean               # clean all builds
+make rebuild             # clean + rebuild
+make cover_server_all    # run coverage server builds in all stages
+make valgrind_server_all # run valgrind on all servers
+make helgrind_server_all # run helgrind on all servers
+make callgrind_server_all# run callgrind on all servers
 ```
 
-To run only the server and client for `Q_9`:
+---
+
+### Stage-Specific Instructions
+
+#### Q_1_to_4 (Graph Algorithms)
 
 ```bash
-make -C Q_9
-./server
-./client
+cd Q_1_to_4
+make            # build main_graph
+make test       # lightweight tests with Valgrind + coverage
+make test-hard  # heavy/performance tests (no coverage)
+make helgrind   # race detection
+make callgrind  # profiling
+make coverage   # generate .gcov
+make report     # HTML report in coverage_report/
 ```
 
-To run coverage build:
+#### Q_6 / Q_7 / Q_8 / Q_9 (Servers & Clients)
+
+For every stage after Q_1_to_4, follow this exact order:
 
 ```bash
-make cover_server    # Build & run server in GCOV mode
-make cover_client    # Build & run client in GCOV mode
+cd Q_6   # or Q_7 / Q_8 / Q_9
+
+# 1) Build
+make
+
+# 2) Memory checks
+make valgrind_server
+make valgrind_client ARGS="..."
+
+# 3) Profiling
+make callgrind_server
+make callgrind_client ARGS="..."
+
+# 4) Race detection
+make helgrind_server
+make helgrind_client ARGS="..."
+
+# 5) Coverage build
+make cover_build
+
+# 6) Coverage execution
+make cover_server
+make cover_client
+
+# 7) Generate gcov reports
+make gcov_report
 ```
 
 ---
@@ -123,14 +166,14 @@ mst
 
 ## Requirements
 
-* **g++** with C++17 support
+* **g++** with C++17 support (C++20 in later stages)
 * Linux/UNIX environment
-* `gcov` for coverage analysis
+* `gcov`, `lcov`, `genhtml` for coverage analysis
 * `make` for build automation
 
 ---
 
 ## Author
 
-**Amit Nachum** and **Or Bibi** – Ariel University
+**Amit Nachum** and **Or Bibi** – Ariel University  
 *Operating Systems Final Project – 2025*

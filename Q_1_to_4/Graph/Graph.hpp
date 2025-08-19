@@ -85,6 +85,7 @@ class Graph{
             start_vertex = other.start_vertex;
             directed_ = other.directed_;
         }
+        return *this;
     }
     // Move semantics
     Graph(Graph &&other) = default;
