@@ -25,6 +25,7 @@
 #include <csignal> // for signal handling
 #include <syncstream>
 #define SCOUT std::osyncstream(std::cout)
+std::mutex g_mtx; // global mutex for shared state
 
 
 
@@ -142,11 +143,12 @@ static void process_line(const std::string& raw, int fd,
         {
             std::lock_guard<std::mutex> lk(S.state_mtx);
             auto it = S.client_graphs.find(fd);
-            if (it != S.client_graphs.end()) g = it->second;
+            if (it != S.client_graphs.end()) g =it->second;
         }
-        
         if (g) g->add_edge(u, v, w);
         else   server.send_to_client(fd, "ERR|Graph not initialized yet.\n");
+        
+        
         return;
     }
 
@@ -197,7 +199,7 @@ static void process_line(const std::string& raw, int fd,
         // Defaults like stage 8 (0 .. n-1)
         const int default_s = 0;
         const int default_t = (n_for_flow > 0 ? n_for_flow - 1 : 0);
-
+        
         Q9::Job job;//Creating a Job struct from the client's input
         job.client_fd = fd;
         job.job_id    = "J" + std::to_string(job_counter++);

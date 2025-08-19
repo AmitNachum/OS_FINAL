@@ -65,8 +65,9 @@ void Pipeline::stop() {
 }
 
 void Pipeline::submit(const Job& job) {
+    std::lock_guard<std::mutex> lk(m_pipeline_mtx); // Lock the pipeline state
     if (!m_started.load()) return;
-    q_in.push(job);
+    q_in.push(job); // Push the job into the input queue (copy)
 }
 
 } // namespace Q9

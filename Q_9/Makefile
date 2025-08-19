@@ -9,7 +9,7 @@ SERVER_SRCS := server.cpp Socket_class/Server_Socket.cpp pipeline/Pipeline.cpp
 CXX       := g++
 CXXSTD    := -std=c++20
 CXXWARN   := -Wall -Wextra -Wpedantic
-CXXOPT    := -O2
+CXXOPT    := -O2 -O0 -g
 CXXMT     := -pthread
 CXXFLAGS  := $(CXXSTD) $(CXXWARN) $(CXXOPT) $(CXXMT) -MMD -MP
 
@@ -132,3 +132,4 @@ clean: clean_coverage
 	@rm -rf $(OBJ_DIR) $(SERVER_EXE) $(CLIENT_EXE)
 	@rm -f *.o client_cov server_cov
 	@rm -f pipeline/*.o Socket_class/*.o
+	@rm -f callgrind.*.out

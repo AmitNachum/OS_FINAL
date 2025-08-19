@@ -102,3 +102,4 @@ callgrind_client: $(CLIENT_EXE)
 clean: clean_coverage
 	@echo "Cleaning build artifacts..."
 	@rm -f $(SERVER_EXE) $(CLIENT_EXE) *.o *.gcno *.gcda *.gcov server_cov client_cov
+	@rm -f callgrind.*.out

@@ -59,7 +59,7 @@ cover_server:
 
 cover_client:
 	@echo "[COVER] Running client coverage build"
-	@./$(GCOV_BUILD_DIR)/client_cov $(ARGS)
+	@./$(GCOV_BUILD_DIR)/client_cov random 3, 0.7
 
 gcov_report:
 	@echo "[COVER] Collecting coverage reports"

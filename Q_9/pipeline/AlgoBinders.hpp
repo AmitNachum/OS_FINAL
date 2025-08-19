@@ -10,6 +10,7 @@
 #include "Result.hpp"
 #include "Job.hpp"
 
+
 namespace Q9 {
 
 // Helper that mimics stage-8 run_request()
@@ -19,6 +20,8 @@ static inline Response run_request_name(GraphT& g,
                                         std::optional<int> source = {},
                                         std::optional<int> sink = {})
 {
+    
+
     Request<Vertex> req(g, name, start, source, sink);
     std::unique_ptr<AlgorithmIO<Vertex>> algo =
         AlgorithmsFactory<Vertex>::create(req);
@@ -26,6 +29,8 @@ static inline Response run_request_name(GraphT& g,
         return {false, std::string("ERR|Unknown algorithm: ") + name + "\n"};
     }
     return algo->run(req);
+    
+   
 }
 
 //======Functions that returns the Result struct based on the Algorithm Respond struct=======
